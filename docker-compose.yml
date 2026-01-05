@@ -1,0 +1,96 @@
+# Docker Compose for Claude Agent API
+version: '3.8'
+
+services:
+  # Claude Agent API 服务
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: claude-agent-api
+    ports:
+      - "8000:8000"
+    environment:
+      # 会话存储配置（可选：memory, file, redis, postgres）
+      - SESSION_STORAGE=memory
+      - SESSION_TTL=3600
+
+      # 文件存储配置（当 SESSION_STORAGE=file 时）
+      # - FILE_STORAGE_DIR=.sessions
+
+      # Redis 存储配置（当 SESSION_STORAGE=redis 时）
+      # - REDIS_URL=redis://redis:6379
+
+      # PostgreSQL 存储配置（当 SESSION_STORAGE=postgres 时）
+      # - POSTGRES_URL=postgresql://claude:password@postgres:5432/claude_agent
+      # - POSTGRES_TABLE_NAME=claude_agent_sessions
+
+      # API 配置
+      - SYSTEM_PROMPT=你是一个有帮助的助手
+      - CORS_ORIGINS=*
+
+      # 可选：API Key 认证
+      # - API_KEY=your-secret-key-here
+    volumes:
+      # 挂载会话存储目录（当使用 file 存储时）
+      - ./sessions:/app/.sessions
+    restart: unless-stopped
+    networks:
+      - claude-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - with-postgres
+
+  # Redis 服务（可选，当使用 Redis 存储时启用）
+  redis:
+    image: redis:7-alpine
+    container_name: claude-agent-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - claude-network
+    command: redis-server --appendonly yes
+    profiles:
+      - with-redis
+
+  # PostgreSQL 服务（可选，当使用 PostgreSQL 存储时启用）
+  postgres:
+    image: postgres:16-alpine
+    container_name: claude-agent-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=claude_agent
+      - POSTGRES_USER=claude
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - claude-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U claude -d claude_agent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - with-postgres
+
+networks:
+  claude-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:

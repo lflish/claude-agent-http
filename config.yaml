@@ -1,0 +1,38 @@
+# Claude Agent 统一配置文件
+# 敏感信息请使用环境变量: ANTHROPIC_API_KEY, POSTGRES_URL, REDIS_URL
+
+# 通用配置
+system_prompt: "你是一个有帮助的AI助手"
+permission_mode: "bypassPermissions"
+allowed_tools:
+  - "Bash"
+  - "Read"
+  - "Write"
+  - "Edit"
+
+# 会话存储配置
+session:
+  storage: "memory"  # memory / file / redis / postgres
+  ttl: 3600          # 会话过期时间(秒)
+
+  # file 存储配置
+  file_dir: ".sessions"
+
+  # redis 配置 (URL 通过环境变量 REDIS_URL 设置)
+  redis_prefix: "claude_agent:"
+
+  # postgres 配置 (URL 通过环境变量 POSTGRES_URL 设置)
+  postgres_table: "claude_agent_sessions"
+
+# API 服务配置
+api:
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins: ["*"]
+  log_level: "INFO"
+
+# MCP 服务器配置
+mcp_servers: {}
+  # example:
+  #   type: "sse"
+  #   url: "http://localhost:3000/sse"

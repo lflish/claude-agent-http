@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Documentation
+docs/_build/
+*.md
+!README.md
+
+# Git
+.git/
+.gitignore
+
+# Sessions and logs
+.sessions/
+*.log
+
+# Test files
+test_*.py
+examples/
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Configuration
+.mcp.json
+.chat_config.json
+.sessionid
