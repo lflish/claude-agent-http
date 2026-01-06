@@ -37,7 +37,7 @@ curl -X POST http://localhost:8000/api/v1/sessions \
    - `subdir` (optional)
    - `metadata` (optional)
 
-3. **Session Storage**: Memory (dev) or SQLite (production)
+3. **Session Storage**: Memory (dev), SQLite (single-instance), or PostgreSQL (multi-instance)
    - Conversation history stored by Claude CLI (JSONL files)
    - Only session metadata stored in our database
 
@@ -76,8 +76,14 @@ user:
   auto_create_dir: true    # Auto-create directories
 
 session:
-  storage: "sqlite"        # memory | sqlite
+  storage: "sqlite"        # memory | sqlite | postgresql
   ttl: 3600               # Session TTL in seconds
+  # PostgreSQL settings (when storage: postgresql)
+  pg_host: "localhost"
+  pg_port: 5432
+  pg_database: "claude_agent"
+  pg_user: "postgres"
+  pg_password: "postgres"
 
 defaults:
   system_prompt: "..."

@@ -40,8 +40,16 @@ user:
   auto_create_dir: true      # Auto-create user directories
 
 session:
-  storage: "sqlite"          # memory | sqlite
+  storage: "sqlite"          # memory | sqlite | postgresql
   ttl: 3600                  # Session TTL in seconds
+  # SQLite settings
+  sqlite_path: "sessions.db"
+  # PostgreSQL settings (when storage: postgresql)
+  pg_host: "localhost"
+  pg_port: 5432
+  pg_database: "claude_agent"
+  pg_user: "postgres"
+  pg_password: "postgres"
 
 defaults:
   system_prompt: "You are a helpful AI assistant."

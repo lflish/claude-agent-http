@@ -44,6 +44,11 @@ class ClaudeAgent:
             storage_type=config.session.storage,
             ttl=config.session.ttl,
             sqlite_path=config.session.sqlite_path,
+            pg_host=config.session.pg_host,
+            pg_port=config.session.pg_port,
+            pg_database=config.session.pg_database,
+            pg_user=config.session.pg_user,
+            pg_password=config.session.pg_password,
         )
 
         # Session ID -> ClaudeSDKClient mapping

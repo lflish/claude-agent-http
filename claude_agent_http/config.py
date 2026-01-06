@@ -17,9 +17,15 @@ class UserConfig(BaseModel):
 
 class SessionConfig(BaseModel):
     """Session storage configuration."""
-    storage: Literal["memory", "sqlite"] = "memory"
+    storage: Literal["memory", "sqlite", "postgresql"] = "memory"
     ttl: int = 3600  # Session TTL in seconds, 0 = no expiration
     sqlite_path: str = "sessions.db"
+    # PostgreSQL settings
+    pg_host: str = "localhost"
+    pg_port: int = 5432
+    pg_database: str = "claude_agent"
+    pg_user: str = "postgresql"
+    pg_password: str = "postgresql"
 
 
 class ApiConfig(BaseModel):

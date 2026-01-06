@@ -7,9 +7,15 @@ user:
 
 # Session storage configuration
 session:
-  storage: "sqlite"              # memory | sqlite
-  ttl: 3600                      # Session TTL in seconds (0 = no expiration)
-  sqlite_path: "sessions.db"     # SQLite database path
+  storage: "sqlite"                # memory | sqlite | postgresql
+  ttl: 3600                        # Session TTL in seconds (0 = no expiration)
+  sqlite_path: "sessions.db"       # SQLite database path
+  # PostgreSQL settings (when storage: postgresql)
+  pg_host: "localhost"
+  pg_port: 5432
+  pg_database: "claude_agent"
+  pg_user: "postgres"
+  pg_password: "postgres"
 
 # API server configuration
 api:

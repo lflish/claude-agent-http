@@ -11,6 +11,7 @@ claude-agent-sdk>=0.1.0
 
 # Storage
 aiosqlite>=0.19.0
+asyncpg>=0.29.0      # PostgreSQL support (optional)
 
 # Configuration
 pyyaml>=6.0
