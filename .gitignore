@@ -30,6 +30,8 @@ env/
 .sessionid
 .chat_config.json
 .mcp.json
+sessions.db
+*.db
 
 # IDE
 .vscode/

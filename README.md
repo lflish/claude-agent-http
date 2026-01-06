@@ -1,82 +1,211 @@
-# Claude Agent
+# Claude Agent HTTP
 
-基于 Claude Agent SDK 的 Python 封装，提供 Library 和 REST API 两种使用方式。
+HTTP REST API wrapper for Claude Agent SDK, providing multi-user session management for Claude Code.
 
-## 安装
+## Features
+
+- **Multi-user Support**: Each user has isolated working directory
+- **Session Management**: Create, resume, and close sessions
+- **Streaming Response**: SSE-based streaming for real-time output
+- **Persistent Storage**: SQLite for session metadata (conversation history managed by Claude CLI)
+- **Configurable**: YAML config with environment variable overrides
+
+## Quick Start
+
+### Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## 配置
+### Run Server
 
-编辑 `config.yaml`：
+```bash
+python -m claude_agent_http.main
+```
+
+Or with uvicorn:
+
+```bash
+uvicorn claude_agent_http.main:app --host 0.0.0.0 --port 8000
+```
+
+### Configuration
+
+Edit `config.yaml`:
 
 ```yaml
-# 通用配置
-system_prompt: "你是一个有帮助的AI助手"
-permission_mode: "bypassPermissions"
-allowed_tools: ["Bash", "Read", "Write", "Edit"]
+user:
+  base_dir: "/home"          # Base directory for all users
+  auto_create_dir: true      # Auto-create user directories
 
-# 会话存储
 session:
-  storage: "memory"  # memory / file / redis / postgres
-  ttl: 3600
+  storage: "sqlite"          # memory | sqlite
+  ttl: 3600                  # Session TTL in seconds
 
-# API 服务
-api:
-  host: "0.0.0.0"
-  port: 8000
-
-# MCP 服务器
-mcp_servers: {}
+defaults:
+  system_prompt: "You are a helpful AI assistant."
+  permission_mode: "bypassPermissions"
+  allowed_tools:
+    - "Bash"
+    - "Read"
+    - "Write"
+    - "Edit"
 ```
 
-敏感信息通过环境变量设置：
+Environment variables override config file:
 
 ```bash
-export POSTGRES_URL="postgresql://user:pass@host:5432/db"
-export REDIS_URL="redis://localhost:6379"
+export CLAUDE_AGENT_USER_BASE_DIR="/data/users"
+export CLAUDE_AGENT_SESSION_STORAGE="sqlite"
+export CLAUDE_AGENT_API_PORT=8000
 ```
 
-## 使用方式
+## API Reference
 
-### 1. Library
+### Sessions
 
-```python
-from claude_agent_lib import ClaudeAgentLibrary, LibraryConfig
-
-# 从 YAML 加载配置
-config = LibraryConfig.from_yaml()
-
-async with ClaudeAgentLibrary(config) as lib:
-    session_id = await lib.create_session()
-    response = await lib.send_message(session_id, "你好")
-    print(response.text)
-```
-
-### 2. REST API
+#### Create Session
 
 ```bash
-# 启动
-python -m claude_agent_api.main
+POST /api/v1/sessions
+Content-Type: application/json
 
-# 创建会话
-curl -X POST http://localhost:8000/api/v1/sessions \
-  -H "Content-Type: application/json" \
-  -d '{"init_message": "Hello"}'
-
-# 发送消息
-curl -X POST http://localhost:8000/api/v1/chat \
-  -H "Content-Type: application/json" \
-  -d '{"session_id": "xxx", "message": "你好"}'
+{
+  "user_id": "zhangsan",           # Required
+  "subdir": "my-project",          # Optional, default: user root
+  "system_prompt": "...",          # Optional
+  "mcp_servers": {},               # Optional
+  "model": "claude-sonnet-4-...",  # Optional
+  "max_turns": 50,                 # Optional
+  "max_budget_usd": 1.0            # Optional
+}
 ```
 
-## 项目结构
+Response:
+
+```json
+{
+  "session_id": "abc123",
+  "user_id": "zhangsan",
+  "cwd": "/home/zhangsan/my-project",
+  "created_at": "2024-01-01T00:00:00",
+  "status": "active"
+}
+```
+
+#### List Sessions
+
+```bash
+GET /api/v1/sessions?user_id=zhangsan
+```
+
+#### Get Session Info
+
+```bash
+GET /api/v1/sessions/{session_id}
+```
+
+#### Resume Session
+
+```bash
+POST /api/v1/sessions/{session_id}/resume
+```
+
+#### Close Session
+
+```bash
+DELETE /api/v1/sessions/{session_id}
+```
+
+### Chat
+
+#### Send Message (Sync)
+
+```bash
+POST /api/v1/chat
+Content-Type: application/json
+
+{
+  "session_id": "abc123",
+  "message": "Hello, what is 2+2?"
+}
+```
+
+Response:
+
+```json
+{
+  "session_id": "abc123",
+  "text": "2 + 2 = 4",
+  "tool_calls": [],
+  "timestamp": "2024-01-01T00:00:00"
+}
+```
+
+#### Send Message (Streaming)
+
+```bash
+POST /api/v1/chat/stream
+Content-Type: application/json
+
+{
+  "session_id": "abc123",
+  "message": "Write a hello world program"
+}
+```
+
+Response (SSE):
 
 ```
-├── config.yaml           # 统一配置
-├── config_loader.py      # 配置加载器
-├── claude_agent_lib/     # Library 模块
-└── claude_agent_api/     # REST API 模块
+data: {"type": "text_delta", "text": "Here"}
+data: {"type": "text_delta", "text": " is"}
+data: {"type": "tool_use", "tool_name": "Write", "tool_input": {...}}
+data: {"type": "done"}
 ```
+
+### Health Check
+
+```bash
+GET /health
+```
+
+## Directory Structure
+
+```
+claude_agent_http/
+├── main.py           # FastAPI entry point
+├── config.py         # Configuration
+├── models.py         # Data models
+├── exceptions.py     # Custom exceptions
+├── security.py       # Path validation
+├── agent.py          # Core ClaudeAgent class
+├── storage/          # Session storage
+│   ├── base.py       # Abstract base
+│   ├── memory.py     # In-memory (dev)
+│   └── sqlite.py     # SQLite (production)
+└── routers/          # API routes
+    ├── sessions.py   # Session endpoints
+    └── chat.py       # Chat endpoints
+```
+
+## User Directory Isolation
+
+Each session's working directory is derived from `user_id` and optional `subdir`:
+
+```
+base_dir = /home
+user_id = zhangsan
+subdir = my-project
+
+cwd = /home/zhangsan/my-project
+```
+
+Security:
+- Path traversal (`..`) is blocked
+- Absolute paths in `subdir` are rejected
+- All paths validated to stay within user directory
+
+## License
+
+MIT

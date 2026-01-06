@@ -1,38 +1,46 @@
-# Claude Agent 统一配置文件
-# 敏感信息请使用环境变量: ANTHROPIC_API_KEY, POSTGRES_URL, REDIS_URL
+# Claude Agent HTTP Configuration
 
-# 通用配置
-system_prompt: "你是一个有帮助的AI助手"
-permission_mode: "bypassPermissions"
-allowed_tools:
-  - "Bash"
-  - "Read"
-  - "Write"
-  - "Edit"
+# User directory configuration
+user:
+  base_dir: "/home/ningci/claude-users"  # Base directory for all users
+  auto_create_dir: true      # Auto-create user directories
 
-# 会话存储配置
+# Session storage configuration
 session:
-  storage: "memory"  # memory / file / redis / postgres
-  ttl: 3600          # 会话过期时间(秒)
+  storage: "sqlite"          # memory | sqlite
+  ttl: 3600                  # Session TTL in seconds (0 = no expiration)
+  sqlite_path: "sessions.db" # SQLite database path
 
-  # file 存储配置
-  file_dir: ".sessions"
-
-  # redis 配置 (URL 通过环境变量 REDIS_URL 设置)
-  redis_prefix: "claude_agent:"
-
-  # postgres 配置 (URL 通过环境变量 POSTGRES_URL 设置)
-  postgres_table: "claude_agent_sessions"
-
-# API 服务配置
+# API server configuration
 api:
   host: "0.0.0.0"
   port: 8000
-  cors_origins: ["*"]
-  log_level: "INFO"
+  cors_origins:
+    - "*"
 
-# MCP 服务器配置
+# Default values for new sessions
+defaults:
+  system_prompt: "You are a helpful AI assistant."
+  permission_mode: "bypassPermissions"
+  allowed_tools:
+    - "Bash"
+    - "Read"
+    - "Write"
+    - "Edit"
+    - "Glob"
+    - "Grep"
+  # model: null              # Use default model
+  # max_turns: null          # No turn limit
+  # max_budget_usd: null     # No budget limit
+
+# Global MCP servers (applied to all sessions)
 mcp_servers: {}
   # example:
-  #   type: "sse"
-  #   url: "http://localhost:3000/sse"
+  #   type: "stdio"
+  #   command: "npx"
+  #   args: ["-y", "@anthropic/mcp-server-filesystem"]
+
+# Global plugins (applied to all sessions)
+plugins: []
+  # - type: "local"
+  #   path: "/path/to/plugin"
