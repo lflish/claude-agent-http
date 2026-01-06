@@ -51,6 +51,17 @@ defaults:
     - "Read"
     - "Write"
     - "Edit"
+    - "Glob"
+    - "Grep"
+  model: null                # Model to use (null = SDK default)
+  max_turns: null            # Max turns (null = unlimited)
+  max_budget_usd: null       # Max budget (null = unlimited)
+
+# Global MCP servers (applied to all sessions)
+mcp_servers: {}
+
+# Global plugins (applied to all sessions)
+plugins: []
 ```
 
 Environment variables override config file:
@@ -63,6 +74,8 @@ export CLAUDE_AGENT_API_PORT=8000
 
 ## API Reference
 
+> **Postman Collection**: Import `postman_collection.json` to test all APIs in Postman.
+
 ### Sessions
 
 #### Create Session
@@ -74,11 +87,7 @@ Content-Type: application/json
 {
   "user_id": "zhangsan",           # Required
   "subdir": "my-project",          # Optional, default: user root
-  "system_prompt": "...",          # Optional
-  "mcp_servers": {},               # Optional
-  "model": "claude-sonnet-4-...",  # Optional
-  "max_turns": 50,                 # Optional
-  "max_budget_usd": 1.0            # Optional
+  "metadata": {"env": "prod"}      # Optional, custom business data
 }
 ```
 
@@ -86,13 +95,18 @@ Response:
 
 ```json
 {
-  "session_id": "abc123",
+  "session_id": "a61c5358-c9ef-4eac-a85e-ad8f68b93b30",
   "user_id": "zhangsan",
   "cwd": "/home/zhangsan/my-project",
-  "created_at": "2024-01-01T00:00:00",
-  "status": "active"
+  "created_at": "2026-01-06T11:43:12.893524",
+  "last_active_at": "2026-01-06T11:43:12.893533",
+  "message_count": 0,
+  "status": "active",
+  "metadata": {"env": "prod"}
 }
 ```
+
+> **Note**: SDK configurations (system_prompt, mcp_servers, model, max_turns, etc.) are read from `config.yaml`. This simplifies API usage.
 
 #### List Sessions
 
