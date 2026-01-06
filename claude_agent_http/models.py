@@ -43,27 +43,13 @@ class SessionInfo(BaseModel):
 # ============ Request Models ============
 
 class CreateSessionRequest(BaseModel):
-    """Request to create a new session."""
-    user_id: str = Field(..., min_length=1, max_length=64)
-    subdir: Optional[str] = Field(None, max_length=200)
+    """Request to create a new session.
 
-    # SDK configuration (optional, use defaults if not provided)
-    system_prompt: Optional[str] = Field(None, max_length=50000)
-    mcp_servers: Optional[Dict[str, Any]] = None
-    plugins: Optional[List[Dict]] = None
-    model: Optional[str] = None
-    permission_mode: Optional[str] = None
-    allowed_tools: Optional[List[str]] = None
-    disallowed_tools: Optional[List[str]] = None
-    add_dirs: Optional[List[str]] = None
-    max_turns: Optional[int] = Field(None, ge=1, le=1000)
-    max_budget_usd: Optional[float] = Field(None, ge=0, le=100)
-
-    # Init message to establish session
-    init_message: str = Field(default="Hello", max_length=1000)
-
-    # Custom metadata
-    metadata: Optional[Dict[str, Any]] = None
+    Only user_id is required. All other configurations are read from config.yaml.
+    """
+    user_id: str = Field(..., min_length=1, max_length=64, description="User identifier")
+    subdir: Optional[str] = Field(None, max_length=200, description="Subdirectory under user home")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Custom metadata for business use")
 
     @field_validator('user_id')
     @classmethod
@@ -76,23 +62,11 @@ class CreateSessionRequest(BaseModel):
     @classmethod
     def validate_subdir(cls, v):
         if v:
-            # Prevent path traversal
             if '..' in v:
                 raise ValueError("Path traversal (..) not allowed in subdir")
             if v.startswith('/'):
                 raise ValueError("Absolute path not allowed in subdir")
             return v.strip('/')
-        return v
-
-    @field_validator('add_dirs')
-    @classmethod
-    def validate_add_dirs(cls, v):
-        if v:
-            for d in v:
-                if '..' in d:
-                    raise ValueError("Path traversal (..) not allowed in add_dirs")
-                if d.startswith('/'):
-                    raise ValueError("Absolute path not allowed in add_dirs")
         return v
 
 

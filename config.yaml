@@ -3,13 +3,13 @@
 # User directory configuration
 user:
   base_dir: "/home/ningci/claude-users"  # Base directory for all users
-  auto_create_dir: true      # Auto-create user directories
+  auto_create_dir: true          # Auto-create user directories
 
 # Session storage configuration
 session:
-  storage: "sqlite"          # memory | sqlite
-  ttl: 3600                  # Session TTL in seconds (0 = no expiration)
-  sqlite_path: "sessions.db" # SQLite database path
+  storage: "sqlite"              # memory | sqlite
+  ttl: 3600                      # Session TTL in seconds (0 = no expiration)
+  sqlite_path: "sessions.db"     # SQLite database path
 
 # API server configuration
 api:
@@ -29,13 +29,13 @@ defaults:
     - "Edit"
     - "Glob"
     - "Grep"
-  # model: null              # Use default model
-  # max_turns: null          # No turn limit
-  # max_budget_usd: null     # No budget limit
+  model: null                    # Model to use (null = SDK default)
+  max_turns: null                # Max conversation turns (null = unlimited)
+  max_budget_usd: null           # Max budget in USD (null = unlimited)
 
 # Global MCP servers (applied to all sessions)
 mcp_servers: {}
-  # example:
+  # filesystem:
   #   type: "stdio"
   #   command: "npx"
   #   args: ["-y", "@anthropic/mcp-server-filesystem"]

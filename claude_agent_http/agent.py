@@ -70,17 +70,6 @@ class ClaudeAgent:
         self,
         user_id: str,
         subdir: Optional[str] = None,
-        system_prompt: Optional[str] = None,
-        mcp_servers: Optional[Dict[str, Any]] = None,
-        plugins: Optional[List[Dict]] = None,
-        model: Optional[str] = None,
-        permission_mode: Optional[str] = None,
-        allowed_tools: Optional[List[str]] = None,
-        disallowed_tools: Optional[List[str]] = None,
-        add_dirs: Optional[List[str]] = None,
-        max_turns: Optional[int] = None,
-        max_budget_usd: Optional[float] = None,
-        init_message: str = "Hello",
         metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
@@ -89,17 +78,6 @@ class ClaudeAgent:
         Args:
             user_id: User identifier
             subdir: Subdirectory under user's home (optional)
-            system_prompt: System prompt (uses default if not provided)
-            mcp_servers: MCP servers configuration
-            plugins: Plugin configurations
-            model: Model to use
-            permission_mode: Permission mode
-            allowed_tools: List of allowed tools
-            disallowed_tools: List of disallowed tools
-            add_dirs: Additional directories to allow (relative paths)
-            max_turns: Maximum conversation turns
-            max_budget_usd: Maximum budget in USD
-            init_message: Initial message to establish session
             metadata: Custom metadata
 
         Returns:
@@ -114,32 +92,29 @@ class ClaudeAgent:
         # Ensure directory exists
         ensure_directory(cwd, self.config.user.auto_create_dir)
 
-        # Build absolute add_dirs
-        abs_add_dirs = build_add_dirs(add_dirs, user_id, self.config.user.base_dir)
-
-        # Merge with defaults
-        final_system_prompt = system_prompt or self.config.defaults.system_prompt
-        final_mcp_servers = mcp_servers or self.config.mcp_servers
-        final_plugins = plugins or self.config.plugins
-        final_model = model or self.config.defaults.model
-        final_permission_mode = permission_mode or self.config.defaults.permission_mode
-        final_allowed_tools = allowed_tools or self.config.defaults.allowed_tools
-        final_max_turns = max_turns or self.config.defaults.max_turns
-        final_max_budget = max_budget_usd or self.config.defaults.max_budget_usd
+        # Use all values from config
+        system_prompt = self.config.defaults.system_prompt
+        mcp_servers = self.config.mcp_servers
+        plugins = self.config.plugins
+        model = self.config.defaults.model
+        permission_mode = self.config.defaults.permission_mode
+        allowed_tools = self.config.defaults.allowed_tools
+        max_turns = self.config.defaults.max_turns
+        max_budget_usd = self.config.defaults.max_budget_usd
 
         # Build SDK options
         options = self._build_options(
             cwd=cwd,
-            system_prompt=final_system_prompt,
-            mcp_servers=final_mcp_servers,
-            plugins=final_plugins,
-            model=final_model,
-            permission_mode=final_permission_mode,
-            allowed_tools=final_allowed_tools,
-            disallowed_tools=disallowed_tools or [],
-            add_dirs=abs_add_dirs,
-            max_turns=final_max_turns,
-            max_budget_usd=final_max_budget,
+            system_prompt=system_prompt,
+            mcp_servers=mcp_servers,
+            plugins=plugins,
+            model=model,
+            permission_mode=permission_mode,
+            allowed_tools=allowed_tools,
+            disallowed_tools=[],
+            add_dirs=[],
+            max_turns=max_turns,
+            max_budget_usd=max_budget_usd,
             resume=None,
         )
 
@@ -149,7 +124,7 @@ class ClaudeAgent:
 
         try:
             # Send init message to get session_id
-            await client.query(prompt=init_message)
+            await client.query(prompt="Hello")
             session_id = await self._extract_session_id(client)
 
             if not session_id:
@@ -161,16 +136,16 @@ class ClaudeAgent:
                 user_id=user_id,
                 subdir=subdir,
                 cwd=cwd,
-                system_prompt=final_system_prompt,
-                mcp_servers=final_mcp_servers,
-                plugins=final_plugins,
-                model=final_model,
-                permission_mode=final_permission_mode,
-                allowed_tools=final_allowed_tools,
-                disallowed_tools=disallowed_tools or [],
-                add_dirs=add_dirs or [],  # Store relative paths
-                max_turns=final_max_turns,
-                max_budget_usd=final_max_budget,
+                system_prompt=system_prompt,
+                mcp_servers=mcp_servers,
+                plugins=plugins,
+                model=model,
+                permission_mode=permission_mode,
+                allowed_tools=allowed_tools,
+                disallowed_tools=[],
+                add_dirs=[],
+                max_turns=max_turns,
+                max_budget_usd=max_budget_usd,
                 metadata=metadata or {},
             )
             await self.storage.save(session_id, session_info)

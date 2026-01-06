@@ -40,17 +40,6 @@ async def create_session(
         session_id = await agent.create_session(
             user_id=request.user_id,
             subdir=request.subdir,
-            system_prompt=request.system_prompt,
-            mcp_servers=request.mcp_servers,
-            plugins=request.plugins,
-            model=request.model,
-            permission_mode=request.permission_mode,
-            allowed_tools=request.allowed_tools,
-            disallowed_tools=request.disallowed_tools,
-            add_dirs=request.add_dirs,
-            max_turns=request.max_turns,
-            max_budget_usd=request.max_budget_usd,
-            init_message=request.init_message,
             metadata=request.metadata,
         )
 
