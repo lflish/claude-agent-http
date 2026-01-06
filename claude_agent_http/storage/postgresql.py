@@ -49,16 +49,43 @@ class PostgreSQLStorage(SessionStorage):
             return
 
         try:
-            # Create connection pool
-            self._pool = await asyncpg.create_pool(
-                host=self.host,
-                port=self.port,
-                database=self.database,
-                user=self.user,
-                password=self.password,
-                min_size=2,
-                max_size=10,
-            )
+            # Try to create connection pool
+            try:
+                self._pool = await asyncpg.create_pool(
+                    host=self.host,
+                    port=self.port,
+                    database=self.database,
+                    user=self.user,
+                    password=self.password,
+                    min_size=2,
+                    max_size=10,
+                )
+            except asyncpg.InvalidCatalogNameError:
+                # Database doesn't exist, create it
+                sys_conn = await asyncpg.connect(
+                    host=self.host,
+                    port=self.port,
+                    database='postgres',
+                    user=self.user,
+                    password=self.password,
+                )
+                try:
+                    await sys_conn.execute(
+                        f'CREATE DATABASE "{self.database}"'
+                    )
+                finally:
+                    await sys_conn.close()
+
+                # Now connect to the newly created database
+                self._pool = await asyncpg.create_pool(
+                    host=self.host,
+                    port=self.port,
+                    database=self.database,
+                    user=self.user,
+                    password=self.password,
+                    min_size=2,
+                    max_size=10,
+                )
 
             # Create table if not exists
             async with self._pool.acquire() as conn:

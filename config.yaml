@@ -7,7 +7,7 @@ user:
 
 # Session storage configuration
 session:
-  storage: "sqlite"                # memory | sqlite | postgresql
+  storage: "postgresql"                # memory | sqlite | postgresql
   ttl: 3600                        # Session TTL in seconds (0 = no expiration)
   sqlite_path: "sessions.db"       # SQLite database path
   # PostgreSQL settings (when storage: postgresql)
