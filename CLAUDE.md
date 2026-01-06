@@ -50,7 +50,7 @@ curl -X POST http://localhost:8000/api/v1/sessions \
 - **`agent.py`**: Core `ClaudeAgent` class - manages `ClaudeSDKClient` instances and sessions
 - **`config.py`**: Pydantic config models, loads from `config.yaml` with env var overrides
 - **`security.py`**: Path validation (`build_cwd`, `build_add_dirs`, `ensure_directory`)
-- **`storage/`**: Session storage backends (Memory for dev, SQLite for production)
+- **`storage/`**: Session storage backends (Memory, SQLite, PostgreSQL)
 - **`routers/`**: FastAPI routes for sessions and chat
 
 ### API Endpoints

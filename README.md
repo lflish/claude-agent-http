@@ -7,7 +7,7 @@ HTTP REST API wrapper for Claude Agent SDK, providing multi-user session managem
 - **Multi-user Support**: Each user has isolated working directory
 - **Session Management**: Create, resume, and close sessions
 - **Streaming Response**: SSE-based streaming for real-time output
-- **Persistent Storage**: SQLite for session metadata (conversation history managed by Claude CLI)
+- **Persistent Storage**: SQLite (single-instance) or PostgreSQL (multi-instance)
 - **Configurable**: YAML config with environment variable overrides
 
 ## Quick Start
@@ -83,6 +83,8 @@ export CLAUDE_AGENT_API_PORT=8000
 ## API Reference
 
 > **Postman Collection**: Import `postman_collection.json` to test all APIs in Postman.
+>
+> **详细示例**: 查看 [docs/API_EXAMPLES.md](docs/API_EXAMPLES.md) 获取完整的 curl 测试示例。
 
 ### Sessions
 
@@ -205,7 +207,8 @@ claude_agent_http/
 ├── storage/          # Session storage
 │   ├── base.py       # Abstract base
 │   ├── memory.py     # In-memory (dev)
-│   └── sqlite.py     # SQLite (production)
+│   ├── sqlite.py     # SQLite (single-instance)
+│   └── postgresql.py # PostgreSQL (multi-instance)
 └── routers/          # API routes
     ├── sessions.py   # Session endpoints
     └── chat.py       # Chat endpoints
