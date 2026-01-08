@@ -22,15 +22,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Troubleshooting references in README.md and README_CN.md
 - Support for custom API endpoints and model configuration
 - Bilingual documentation (English and Chinese)
+- gosu tool for secure user switching in Docker containers
 
 ### Changed
 - Unified Docker configuration with single docker-compose.yml file
 - Separated PostgreSQL configuration into dedicated docker-compose.postgres.yml
 - Updated documentation structure for better clarity
 - Improved CLAUDE.md with enhanced guidance
-- Run Docker containers as non-root user (claudeuser, UID 1000) for security
+- Docker entrypoint now automatically fixes volume permissions before switching to non-root user
+- Container starts as root, fixes permissions, then switches to claudeuser for security
 
 ### Fixed
+- **Critical: Docker volume permission issues with named volumes**
+  - Fixed root:root ownership on Docker named volumes preventing writes
+  - Automatic permission fixing in entrypoint script before application starts
+  - Database file creation now works seamlessly with named volumes
+  - No manual intervention required for permission management
 - HOME environment variable not passed through in docker-compose.yml
 - Docker compose syntax error with PostgreSQL depends_on configuration
 - Permission issues when creating sessions in Docker containers
@@ -40,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - Implemented non-root user execution in Docker containers
 - Enhanced path validation and user directory isolation
+- Secure user switching with gosu (starts as root, switches to claudeuser)
 
 ## [1.0.0] - 2026-01-06
 
