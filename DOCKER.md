@@ -4,27 +4,36 @@ This document explains how to deploy Claude Agent HTTP service using Docker and 
 
 English | [简体中文](DOCKER_CN.md)
 
+## Overview
+
+The service supports three deployment modes through a unified `docker-compose.yml` file:
+
+1. **SQLite + Named Volumes** (Default, Recommended) - Production-ready, automatic permission management
+2. **SQLite + Bind Mounts** (Development) - Direct file access for development
+3. **PostgreSQL** (Enterprise) - Multi-instance capable with connection pooling
+
 ## Quick Start
 
-### 1. Create Data Directories
+### Using Helper Script (Recommended)
 
 ```bash
-# Create data directories
-sudo mkdir -p /opt/claude-code-http/{claude-users,db}
+# 1. Copy environment file
+cp .env.example .env
 
-# Set directory permissions (replace with your user if needed)
-sudo chown -R $USER:$USER /opt/claude-code-http
+# 2. Edit .env and set your API Key
+# ANTHROPIC_API_KEY=your_api_key_here
 
-# Optional: Set specific UID/GID (default is 1000:1000 in container)
-# This ensures the container user (claudeuser) can access the mounted volumes
-# If your user has a different UID, set it in .env file: UID=$(id -u) GID=$(id -g)
+# 3. Start with automatic configuration
+./docker-start.sh
+
+# Or specify deployment mode:
+./docker-start.sh --bind-mounts  # Development mode
+./docker-start.sh --postgres     # PostgreSQL mode
 ```
 
-> **Note**: The container runs as non-root user `claudeuser` (UID 1000) for security. If your host user has a different UID, configure it in the `.env` file to avoid permission issues.
+### Manual Deployment
 
-### 2. Prepare Environment File
-
-Copy the environment variable template and configure it:
+#### 1. Prepare Environment File
 
 ```bash
 cp .env.example .env
@@ -39,22 +48,33 @@ ANTHROPIC_API_KEY=your_api_key_here
 
 > **Warning**: If you don't configure `ANTHROPIC_API_KEY`, the service can start but all Claude-related features will fail.
 
-### 3. Start Services
+#### 2. Choose Deployment Mode
 
-Default uses SQLite storage (suitable for single-instance deployment):
+**Mode 1: SQLite + Named Volumes (Default)**
 
 ```bash
-# Build and start services
+# Docker manages permissions automatically
 docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Check service status
-docker-compose ps
 ```
 
-### 4. Verify Service
+**Mode 2: SQLite + Bind Mounts (Development)**
+
+```bash
+# Copy bind mounts override configuration
+cp docker-compose.override.bindmounts.yml docker-compose.override.yml
+
+# Start services
+docker-compose up -d
+```
+
+**Mode 3: PostgreSQL (Enterprise)**
+
+```bash
+# Start with PostgreSQL profile
+docker-compose --profile postgres up -d
+```
+
+### 3. Verify Service
 
 ```bash
 # Health check
@@ -74,7 +94,7 @@ curl -X POST http://localhost:8000/api/v1/chat \
   }'
 ```
 
-### 5. Stop Services
+### 4. Stop Services
 
 ```bash
 # Stop services (keep data)
@@ -83,65 +103,97 @@ docker-compose stop
 # Stop and remove containers (keep data)
 docker-compose down
 
-# Complete cleanup (including data)
-docker-compose down
-sudo rm -rf /opt/claude-code-http
+# Complete cleanup (including volumes)
+docker-compose down -v
 ```
 
 ## Configuration
 
-### Storage Modes
+### Deployment Modes
 
-#### SQLite (Default, Recommended for Single Instance)
+#### Mode 1: SQLite + Named Volumes (Default)
 
-Default configuration, no additional setup needed:
+**Best for**: Production, single-instance deployments
+
+- Docker automatically manages volume permissions
+- No manual directory creation needed
+- Containers run as UID 1000 (claudeuser)
 
 ```bash
+# .env configuration
+UID=1000
+GID=1000
 CLAUDE_AGENT_SESSION_STORAGE=sqlite
-HOST_DB_DIR=/opt/claude-code-http/db
 ```
 
-> **Note**: Even if `config.yaml` configures other storage methods (like PostgreSQL), Docker Compose will prioritize SQLite via environment variables. This is because **environment variables have higher priority than config files**.
+```bash
+# Start
+docker-compose up -d
+```
 
-#### PostgreSQL (Multi-instance/Production)
+#### Mode 2: SQLite + Bind Mounts (Development)
 
-Use PostgreSQL compose file:
+**Best for**: Development, when you need direct file access
+
+- Direct access to files on host filesystem
+- Requires proper host directory permissions
+- Set UID/GID to match your host user
 
 ```bash
-# Start PostgreSQL version
-docker-compose -f docker-compose.postgres.yml up -d
+# .env configuration
+UID=$(id -u)
+GID=$(id -g)
+CLAUDE_AGENT_SESSION_STORAGE=sqlite
+```
 
-# Or configure in .env
+```bash
+# Copy override configuration
+cp docker-compose.override.bindmounts.yml docker-compose.override.yml
+
+# Start (docker-start.sh handles permissions automatically)
+./docker-start.sh --bind-mounts
+```
+
+#### Mode 3: PostgreSQL (Enterprise)
+
+**Best for**: Production, multi-instance deployments
+
+- Multi-instance capable with connection pooling
+- Better for high-concurrency scenarios
+
+```bash
+# .env configuration
 CLAUDE_AGENT_SESSION_STORAGE=postgresql
 CLAUDE_AGENT_SESSION_PG_PASSWORD=your_secure_password
 ```
 
-#### Memory (Development/Testing)
+```bash
+# Start with PostgreSQL profile
+docker-compose --profile postgres up -d
+```
 
-Configure in `.env`:
+#### Mode 4: Memory (Development/Testing)
+
+**Best for**: Testing, temporary sessions
+
+- No persistence, data lost on restart
+- Fastest performance
 
 ```bash
+# .env configuration
 CLAUDE_AGENT_SESSION_STORAGE=memory
 ```
 
-### Data Persistence
+### Volume Management
 
-#### User Working Directory
+**Named Volumes** (Default):
+- `claude-users` - User working directories
+- `claude-db` - SQLite database
+- `postgres_data` - PostgreSQL data (when using PostgreSQL)
 
-User work files are stored in:
-
-```bash
-# Host path (default)
-/opt/claude-code-http/claude-users/{user_id}/
-
-# Can be modified in .env
-HOST_USER_DATA_DIR=/opt/claude-code-http/claude-users
-```
-
-#### Session Database
-
-- **SQLite**: Stored in `/opt/claude-code-http/db/sessions.db`
-- **PostgreSQL**: Stored in Docker volume `postgres_data`
+**Bind Mounts** (Development):
+- Specified via `HOST_USER_DATA_DIR` and `HOST_DB_DIR` in .env
+- Configured through `docker-compose.override.yml`
 
 ### Port Configuration
 

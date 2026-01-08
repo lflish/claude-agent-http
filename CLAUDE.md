@@ -18,19 +18,26 @@ python -m claude_agent_http.main
 # Or with uvicorn directly (with auto-reload)
 uvicorn claude_agent_http.main:app --host 0.0.0.0 --port 8000 --reload
 
-# Docker deployment (SQLite with named volumes - recommended)
+# Docker deployment - Quick start with helper script
 cp .env.example .env
 # Edit .env and set ANTHROPIC_API_KEY
+./docker-start.sh
+
+# Docker deployment - Manual modes
+# 1. SQLite + Named Volumes (default, recommended)
 docker-compose up -d
 
-# Docker deployment (SQLite with bind mounts - requires host permission setup)
-docker-compose -f docker-compose.bindmounts.yml up -d
+# 2. SQLite + Bind Mounts (development mode)
+./docker-start.sh --bind-mounts
 
-# Docker deployment (PostgreSQL)
-docker-compose -f docker-compose.postgres.yml up -d
+# 3. PostgreSQL (enterprise mode)
+docker-compose --profile postgres up -d
+# Or: ./docker-start.sh --postgres
 
-# Docker rebuild (no cache)
-docker-compose build --no-cache
+# Docker management
+./docker-start.sh --build    # Rebuild images
+./docker-start.sh --stop     # Stop containers
+./docker-start.sh --down     # Stop and remove containers
 
 # Check service health
 curl http://localhost:8000/health
@@ -170,30 +177,42 @@ All storage backends implement `SessionStorage` interface (storage/base.py):
 
 ### Docker Deployment Architecture
 
-**Non-Root User Security**: Containers run as non-root user `claudeuser` (UID 1000) for security.
+**Unified Configuration**: Single `docker-compose.yml` file supports multiple deployment modes through environment variables and profiles.
 
-**Volume Strategies**:
-1. **Named Volumes** (default `docker-compose.yml`): Docker manages permissions automatically
-   - Use UID=1000, GID=1000 in .env (matches claudeuser)
-   - Best for: Production deployments, portability
+**Deployment Modes**:
+1. **SQLite + Named Volumes** (default - production recommended)
+   - Command: `docker-compose up -d` or `./docker-start.sh`
+   - Docker manages permissions automatically
+   - Best for: Production, single-instance deployments
    - Database: `/data/db/sessions.db`
    - User files: `/data/claude-users/{user_id}/`
 
-2. **Bind Mounts** (`docker-compose.bindmounts.yml`): Direct host filesystem access
-   - Requires: `sudo chown -R $(id -u):$(id -g) /opt/claude-code-http/`
-   - Set UID/GID in .env to match your host user
+2. **SQLite + Bind Mounts** (development mode)
+   - Command: `./docker-start.sh --bind-mounts`
+   - Direct host filesystem access
+   - Auto-creates directories and fixes permissions
    - Best for: Development, when you need direct file access
 
-**Entrypoint Script** (`docker-entrypoint.sh`):
-- Validates write permissions on startup
-- Provides clear error messages if permissions are wrong
-- Tests `/data/claude-users` and `/data/db` directories
+3. **PostgreSQL** (enterprise mode)
+   - Command: `docker-compose --profile postgres up -d` or `./docker-start.sh --postgres`
+   - Multi-instance capable with connection pooling
+   - Best for: Production, multi-instance deployments
 
-**Configuration Loading Order**:
-1. Dockerfile builds with `config.yaml` defaults
-2. docker-compose sets environment variables (highest priority)
-3. Container starts with entrypoint checking permissions
-4. Application loads config with env var overrides
+**Helper Script** (`docker-start.sh`):
+- Validates configuration and environment variables
+- Checks ANTHROPIC_API_KEY is set
+- Auto-creates and fixes permissions for bind mounts
+- Provides clear error messages and suggestions
+- Runs health checks after startup
+
+**Volume Management**:
+- **Named Volumes**: Docker-managed, UID/GID defaults to 1000:1000
+- **Bind Mounts**: Host-managed, use `docker-compose.override.yml` (auto-created by script)
+
+**Configuration Priority**:
+1. Environment variables (.env file) - highest priority
+2. docker-compose.yml defaults
+3. config.yaml defaults - lowest priority
 
 ## Documentation References
 

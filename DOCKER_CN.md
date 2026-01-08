@@ -4,27 +4,36 @@
 
 [English](DOCKER.md) | 简体中文
 
+## 概述
+
+服务通过统一的 `docker-compose.yml` 文件支持三种部署模式：
+
+1. **SQLite + 命名卷**（默认，推荐）- 生产就绪，自动权限管理
+2. **SQLite + 绑定挂载**（开发）- 直接文件访问用于开发
+3. **PostgreSQL**（企业）- 支持多实例和连接池
+
 ## 快速开始
 
-### 1. 创建数据目录
+### 使用辅助脚本（推荐）
 
 ```bash
-# 创建数据目录
-sudo mkdir -p /opt/claude-code-http/{claude-users,db}
+# 1. 复制环境文件
+cp .env.example .env
 
-# 设置目录权限（如有需要，替换为你的用户）
-sudo chown -R $USER:$USER /opt/claude-code-http
+# 2. 编辑 .env 并设置你的 API Key
+# ANTHROPIC_API_KEY=your_api_key_here
 
-# 可选：设置特定的 UID/GID（容器中默认为 1000:1000）
-# 这确保容器用户（claudeuser）可以访问挂载的卷
-# 如果你的用户有不同的 UID，在 .env 文件中设置：UID=$(id -u) GID=$(id -g)
+# 3. 使用自动配置启动
+./docker-start.sh
+
+# 或指定部署模式：
+./docker-start.sh --bind-mounts  # 开发模式
+./docker-start.sh --postgres     # PostgreSQL 模式
 ```
 
-> **注意**：容器以非 root 用户 `claudeuser`（UID 1000）运行以提高安全性。如果你的宿主机用户有不同的 UID，请在 `.env` 文件中配置以避免权限问题。
+### 手动部署
 
-### 2. 准备环境文件
-
-复制环境变量模板文件并配置：
+#### 1. 准备环境文件
 
 ```bash
 cp .env.example .env
@@ -39,22 +48,33 @@ ANTHROPIC_API_KEY=your_api_key_here
 
 > **警告**：如果不配置 `ANTHROPIC_API_KEY`，服务虽然能启动，但所有 Claude 相关功能都会失败。
 
-### 3. 启动服务
+#### 2. 选择部署模式
 
-默认使用 SQLite 存储（适合单实例部署）：
+**模式 1：SQLite + 命名卷（默认）**
 
 ```bash
-# 构建并启动服务
+# Docker 自动管理权限
 docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
-
-# 查看服务状态
-docker-compose ps
 ```
 
-### 4. 验证服务
+**模式 2：SQLite + 绑定挂载（开发）**
+
+```bash
+# 复制绑定挂载覆盖配置
+cp docker-compose.override.bindmounts.yml docker-compose.override.yml
+
+# 启动服务
+docker-compose up -d
+```
+
+**模式 3：PostgreSQL（企业）**
+
+```bash
+# 使用 PostgreSQL profile 启动
+docker-compose --profile postgres up -d
+```
+
+### 3. 验证服务
 
 ```bash
 # 健康检查
@@ -83,21 +103,97 @@ docker-compose stop
 # 停止并删除容器（保留数据）
 docker-compose down
 
-# 完全清理（包括数据）
-docker-compose down
-sudo rm -rf /opt/claude-code-http
+# 完全清理（包括卷）
+docker-compose down -v
 ```
 
 ## 配置说明
 
-### 存储模式
+### 部署模式
 
-#### SQLite（默认，推荐单实例）
+#### 模式 1：SQLite + 命名卷（默认）
 
-默认配置，无需额外设置：
+**适用于**：生产环境，单实例部署
+
+- Docker 自动管理卷权限
+- 无需手动创建目录
+- 容器以 UID 1000（claudeuser）运行
 
 ```bash
+# .env 配置
+UID=1000
+GID=1000
 CLAUDE_AGENT_SESSION_STORAGE=sqlite
+```
+
+```bash
+# 启动
+docker-compose up -d
+```
+
+#### 模式 2：SQLite + 绑定挂载（开发）
+
+**适用于**：开发环境，需要直接访问文件
+
+- 直接访问宿主机文件系统
+- 需要正确的宿主机目录权限
+- 设置 UID/GID 以匹配你的宿主机用户
+
+```bash
+# .env 配置
+UID=$(id -u)
+GID=$(id -g)
+CLAUDE_AGENT_SESSION_STORAGE=sqlite
+```
+
+```bash
+# 复制覆盖配置
+cp docker-compose.override.bindmounts.yml docker-compose.override.yml
+
+# 启动（docker-start.sh 自动处理权限）
+./docker-start.sh --bind-mounts
+```
+
+#### 模式 3：PostgreSQL（企业）
+
+**适用于**：生产环境，多实例部署
+
+- 支持多实例和连接池
+- 更适合高并发场景
+
+```bash
+# .env 配置
+CLAUDE_AGENT_SESSION_STORAGE=postgresql
+CLAUDE_AGENT_SESSION_PG_PASSWORD=your_secure_password
+```
+
+```bash
+# 使用 PostgreSQL profile 启动
+docker-compose --profile postgres up -d
+```
+
+#### 模式 4：内存（开发/测试）
+
+**适用于**：测试，临时会话
+
+- 不持久化，重启后数据丢失
+- 性能最快
+
+```bash
+# .env 配置
+CLAUDE_AGENT_SESSION_STORAGE=memory
+```
+
+### 卷管理
+
+**命名卷**（默认）：
+- `claude-users` - 用户工作目录
+- `claude-db` - SQLite 数据库
+- `postgres_data` - PostgreSQL 数据（使用 PostgreSQL 时）
+
+**绑定挂载**（开发）：
+- 通过 .env 中的 `HOST_USER_DATA_DIR` 和 `HOST_DB_DIR` 指定
+- 通过 `docker-compose.override.yml` 配置
 HOST_DB_DIR=/opt/claude-code-http/db
 ```
 

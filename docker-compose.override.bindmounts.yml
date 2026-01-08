@@ -1,0 +1,23 @@
+# ============================================
+# Docker Compose Override for Bind Mounts
+# ============================================
+# Use this file to enable bind mounts instead of named volumes
+#
+# Usage:
+#   1. Copy this file: cp docker-compose.override.bindmounts.yml docker-compose.override.yml
+#   2. Create host directories: sudo mkdir -p /opt/claude-code-http/{claude-users,db}
+#   3. Fix permissions: sudo chown -R $(id -u):$(id -g) /opt/claude-code-http/
+#   4. Set UID/GID in .env: UID=$(id -u) GID=$(id -g)
+#   5. Start: docker-compose up -d
+#
+# ============================================
+
+version: '3.8'
+
+services:
+  app:
+    volumes:
+      # Override: Use bind mounts for direct host filesystem access
+      - ${HOST_USER_DATA_DIR:-/opt/claude-code-http/claude-users}:/data/claude-users
+      - ${HOST_DB_DIR:-/opt/claude-code-http/db}:/data/db
+      - ${HOST_CONFIG_FILE:-./config.yaml}:/app/config.yaml:ro

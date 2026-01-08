@@ -1,47 +1,139 @@
+# ============================================
+# Claude Agent HTTP - Unified Docker Compose
+# ============================================
+# This unified compose file supports multiple deployment modes through environment variables.
+#
+# Usage Examples:
+#   1. SQLite + Named Volumes (Default - Production Recommended):
+#      docker-compose up -d
+#
+#   2. SQLite + Bind Mounts (Development):
+#      cp docker-compose.override.bindmounts.yml docker-compose.override.yml
+#      docker-compose up -d
+#
+#   3. PostgreSQL (Enterprise):
+#      docker-compose --profile postgres up -d
+#
+#   4. Use helper script (validates configuration):
+#      ./docker-start.sh
+#
+# Configuration:
+#   - Edit .env file to set your configuration
+#   - Set CLAUDE_AGENT_SESSION_STORAGE: sqlite | postgresql
+#   - For PostgreSQL, use --profile postgres
+#
+# ============================================
+
 version: '3.8'
 
 services:
-  # Claude Agent HTTP API service (SQLite mode)
+  # ============================================
+  # PostgreSQL Database (Optional)
+  # ============================================
+  # Enable with: docker-compose --profile postgres up -d
+  postgres:
+    image: postgres:15-alpine
+    container_name: claude-agent-postgres
+    restart: unless-stopped
+    profiles:
+      - postgres
+    environment:
+      POSTGRES_DB: ${CLAUDE_AGENT_SESSION_PG_DATABASE:-claude_agent}
+      POSTGRES_USER: ${CLAUDE_AGENT_SESSION_PG_USER:-postgres}
+      POSTGRES_PASSWORD: ${CLAUDE_AGENT_SESSION_PG_PASSWORD:-postgres}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CLAUDE_AGENT_SESSION_PG_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - claude-network
+
+  # ============================================
+  # Claude Agent HTTP API Service
+  # ============================================
   app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: claude-agent-http
     restart: unless-stopped
-    # Run as non-root user (matches UID 1000 in Dockerfile)
+
+    # Run as non-root user for security
+    # UID/GID should match your host user for bind mounts
+    # For named volumes, use 1000:1000 (default claudeuser)
     user: "${UID:-1000}:${GID:-1000}"
+
+    # Conditional dependency: only depends on postgres when using PostgreSQL storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+
     environment:
-      # User directory configuration
+      # ============================================
+      # User Directory Configuration
+      # ============================================
       CLAUDE_AGENT_USER_BASE_DIR: ${CLAUDE_AGENT_USER_BASE_DIR:-/data/claude-users}
       CLAUDE_AGENT_USER_AUTO_CREATE_DIR: ${CLAUDE_AGENT_USER_AUTO_CREATE_DIR:-true}
 
-      # Session storage configuration (SQLite by default)
+      # ============================================
+      # Session Storage Configuration
+      # ============================================
+      # Storage backend: memory | sqlite | postgresql
       CLAUDE_AGENT_SESSION_STORAGE: ${CLAUDE_AGENT_SESSION_STORAGE:-sqlite}
       CLAUDE_AGENT_SESSION_TTL: ${CLAUDE_AGENT_SESSION_TTL:-3600}
+
+      # SQLite configuration (used when storage=sqlite)
       CLAUDE_AGENT_SESSION_SQLITE_PATH: ${CLAUDE_AGENT_SESSION_SQLITE_PATH:-/data/db/sessions.db}
 
-      # API server configuration
+      # PostgreSQL configuration (used when storage=postgresql)
+      CLAUDE_AGENT_SESSION_PG_HOST: ${CLAUDE_AGENT_SESSION_PG_HOST:-postgres}
+      CLAUDE_AGENT_SESSION_PG_PORT: ${CLAUDE_AGENT_SESSION_PG_PORT:-5432}
+      CLAUDE_AGENT_SESSION_PG_DATABASE: ${CLAUDE_AGENT_SESSION_PG_DATABASE:-claude_agent}
+      CLAUDE_AGENT_SESSION_PG_USER: ${CLAUDE_AGENT_SESSION_PG_USER:-postgres}
+      CLAUDE_AGENT_SESSION_PG_PASSWORD: ${CLAUDE_AGENT_SESSION_PG_PASSWORD:-postgres}
+
+      # ============================================
+      # API Server Configuration
+      # ============================================
       CLAUDE_AGENT_API_HOST: ${CLAUDE_AGENT_API_HOST:-0.0.0.0}
       CLAUDE_AGENT_API_PORT: ${CLAUDE_AGENT_API_PORT:-8000}
 
-      # Claude SDK settings (REQUIRED)
+      # ============================================
+      # Anthropic Claude SDK Configuration
+      # ============================================
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN}
-      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL}
-      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL}
+      ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
 
-      # Default session settings (optional)
-      CLAUDE_AGENT_DEFAULTS_MODEL: ${CLAUDE_AGENT_DEFAULTS_MODEL}
-      CLAUDE_AGENT_DEFAULTS_MAX_TURNS: ${CLAUDE_AGENT_DEFAULTS_MAX_TURNS}
-      CLAUDE_AGENT_DEFAULTS_MAX_BUDGET_USD: ${CLAUDE_AGENT_DEFAULTS_MAX_BUDGET_USD}
+      # ============================================
+      # Default Session Settings
+      # ============================================
+      CLAUDE_AGENT_DEFAULTS_MODEL: ${CLAUDE_AGENT_DEFAULTS_MODEL:-}
+      CLAUDE_AGENT_DEFAULTS_MAX_TURNS: ${CLAUDE_AGENT_DEFAULTS_MAX_TURNS:-}
+      CLAUDE_AGENT_DEFAULTS_MAX_BUDGET_USD: ${CLAUDE_AGENT_DEFAULTS_MAX_BUDGET_USD:-}
+
     volumes:
-      # Use named volumes (recommended - Docker handles permissions automatically)
+      # Named volumes (default): Docker manages permissions automatically
+      # For bind mounts: copy docker-compose.override.bindmounts.yml to docker-compose.override.yml
       - claude-users:/data/claude-users
       - claude-db:/data/db
-      # Mount config file (optional, for custom configuration)
-      - ${HOST_CONFIG_FILE:-./config.yaml}:/app/config.yaml
+      # Optional: Custom config file
+      - ${HOST_CONFIG_FILE:-./config.yaml}:/app/config.yaml:ro
+
     ports:
       - "${API_PORT:-8000}:8000"
+
+    networks:
+      - claude-network
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -49,10 +141,21 @@ services:
       retries: 3
       start_period: 10s
 
-# Named volumes for data persistence
-# Docker automatically handles permissions for named volumes
+# ============================================
+# Named Volumes
+# ============================================
+# Docker automatically manages permissions for named volumes
 volumes:
   claude-users:
     driver: local
   claude-db:
     driver: local
+  postgres_data:
+    driver: local
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  claude-network:
+    driver: bridge
