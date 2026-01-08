@@ -80,6 +80,10 @@ Environment variables override config file:
 # Required: Set your Anthropic API Key
 export ANTHROPIC_API_KEY="sk-ant-xxxxx"
 
+# Optional: Custom API endpoint and model
+export ANTHROPIC_BASE_URL="https://your-custom-endpoint.com"
+export ANTHROPIC_MODEL="claude-3-opus-20240229"
+
 # Optional: Override config settings
 export CLAUDE_AGENT_USER_BASE_DIR="/data/users"
 export CLAUDE_AGENT_SESSION_STORAGE="sqlite"
@@ -87,6 +91,8 @@ export CLAUDE_AGENT_API_PORT=8000
 ```
 
 **Important**: You must set `ANTHROPIC_API_KEY` environment variable for the service to work. Get your API key from https://console.anthropic.com/
+
+**Custom Endpoints**: If using a custom API endpoint or proxy, set `ANTHROPIC_BASE_URL` and optionally use `ANTHROPIC_AUTH_TOKEN` instead of `ANTHROPIC_API_KEY`.
 
 ## Docker Deployment
 

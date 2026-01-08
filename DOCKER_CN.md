@@ -326,6 +326,9 @@ docker-compose up -d
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `ANTHROPIC_API_KEY` | Anthropic API 密钥 | **必填** |
+| `ANTHROPIC_AUTH_TOKEN` | API_KEY 的替代方案（用于自定义端点） | - |
+| `ANTHROPIC_BASE_URL` | 自定义 API 端点 URL | https://api.anthropic.com |
+| `ANTHROPIC_MODEL` | 覆盖默认模型 | SDK 默认 |
 | `CLAUDE_AGENT_SESSION_STORAGE` | 存储后端 | sqlite |
 | `CLAUDE_AGENT_SESSION_TTL` | 会话过期时间（秒） | 3600 |
 | `API_PORT` | API 服务端口 | 8000 |

@@ -326,6 +326,9 @@ See `.env.example` file for all configurable environment variables.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `ANTHROPIC_API_KEY` | Anthropic API key | **Required** |
+| `ANTHROPIC_AUTH_TOKEN` | Alternative to API_KEY (for custom endpoints) | - |
+| `ANTHROPIC_BASE_URL` | Custom API endpoint URL | https://api.anthropic.com |
+| `ANTHROPIC_MODEL` | Override default model | SDK default |
 | `CLAUDE_AGENT_SESSION_STORAGE` | Storage backend | sqlite |
 | `CLAUDE_AGENT_SESSION_TTL` | Session expiration time (seconds) | 3600 |
 | `API_PORT` | API service port | 8000 |

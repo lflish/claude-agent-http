@@ -80,6 +80,10 @@ plugins: []
 # 必需：设置你的 Anthropic API Key
 export ANTHROPIC_API_KEY="sk-ant-xxxxx"
 
+# 可选：自定义 API 端点和模型
+export ANTHROPIC_BASE_URL="https://your-custom-endpoint.com"
+export ANTHROPIC_MODEL="claude-3-opus-20240229"
+
 # 可选：覆盖配置设置
 export CLAUDE_AGENT_USER_BASE_DIR="/data/users"
 export CLAUDE_AGENT_SESSION_STORAGE="sqlite"
@@ -87,6 +91,8 @@ export CLAUDE_AGENT_API_PORT=8000
 ```
 
 **重要**：你必须设置 `ANTHROPIC_API_KEY` 环境变量才能使服务正常工作。从 https://console.anthropic.com/ 获取你的 API 密钥。
+
+**自定义端点**：如果使用自定义 API 端点或代理，请设置 `ANTHROPIC_BASE_URL`，并可选择使用 `ANTHROPIC_AUTH_TOKEN` 代替 `ANTHROPIC_API_KEY`。
 
 ## Docker 部署
 
