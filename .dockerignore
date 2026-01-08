@@ -46,3 +46,15 @@ docker-compose.yml
 .mcp.json
 .chat_config.json
 .sessionid
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Data directories
+data/
+*.db
+*.db-shm
+*.db-wal
+sessions.db

@@ -2,12 +2,12 @@
 
 # User directory configuration
 user:
-  base_dir: "/home/ningci/claude-users"  # Base directory for all users
+  base_dir: "/home"  # Base directory for all users
   auto_create_dir: true          # Auto-create user directories
 
 # Session storage configuration
 session:
-  storage: "postgresql"                # memory | sqlite | postgresql
+  storage: "sqlite"                # memory | sqlite | postgresql
   ttl: 3600                        # Session TTL in seconds (0 = no expiration)
   sqlite_path: "sessions.db"       # SQLite database path
   # PostgreSQL settings (when storage: postgresql)

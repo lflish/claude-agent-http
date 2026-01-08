@@ -2,6 +2,8 @@
 
 HTTP REST API wrapper for Claude Agent SDK, providing multi-user session management for Claude Code.
 
+English | [简体中文](README_CN.md)
+
 ## Features
 
 - **Multi-user Support**: Each user has isolated working directory
@@ -75,9 +77,33 @@ plugins: []
 Environment variables override config file:
 
 ```bash
+# Required: Set your Anthropic API Key
+export ANTHROPIC_API_KEY="sk-ant-xxxxx"
+
+# Optional: Override config settings
 export CLAUDE_AGENT_USER_BASE_DIR="/data/users"
 export CLAUDE_AGENT_SESSION_STORAGE="sqlite"
 export CLAUDE_AGENT_API_PORT=8000
+```
+
+**Important**: You must set `ANTHROPIC_API_KEY` environment variable for the service to work. Get your API key from https://console.anthropic.com/
+
+## Docker Deployment
+
+For detailed Docker deployment instructions, see [DOCKER.md](DOCKER.md) ([中文版](DOCKER_CN.md))
+
+```bash
+# 1. Copy environment file
+cp .env.example .env
+
+# 2. Edit .env and set your API Key
+# ANTHROPIC_API_KEY=your_api_key_here
+
+# 3. Start services
+docker-compose up -d
+
+# 4. Verify service
+curl http://localhost:8000/health
 ```
 
 ## API Reference
