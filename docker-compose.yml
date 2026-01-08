@@ -69,11 +69,9 @@ services:
     # For named volumes, use 1000:1000 (default claudeuser)
     user: "${UID:-1000}:${GID:-1000}"
 
-    # Conditional dependency: only depends on postgres when using PostgreSQL storage
-    depends_on:
-      postgres:
-        condition: service_healthy
-        required: false
+    # Note: When using PostgreSQL mode (--profile postgres),
+    # the app will wait for postgres to be healthy
+    # In SQLite mode (default), postgres is not started
 
     environment:
       # ============================================
