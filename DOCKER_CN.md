@@ -332,33 +332,88 @@ docker run -d \
 
 ## 故障排查
 
-### 查看日志
+### 常见问题
 
+#### 1. 权限拒绝错误：`EACCES: permission denied, mkdir '/home/claudeuser'`
+
+**症状：**
+- 会话创建失败，返回 503 Service Unavailable
+- 日志显示：`EACCES: permission denied, mkdir '/home/claudeuser'`
+- 健康检查返回错误
+
+**根本原因：**
+使用了过期的 Docker 镜像，该镜像没有配置 `claudeuser` 用户。
+
+**解决方案：**
 ```bash
-# 查看所有服务日志
-docker-compose logs
+# 停止容器
+docker-compose down
 
-# 查看 API 服务日志
-docker-compose logs app
+# 从头重新构建镜像（不使用缓存）
+docker-compose build --no-cache
 
-# 查看 PostgreSQL 日志（如使用）
-docker-compose -f docker-compose.postgres.yml logs postgres
+# 启动服务
+docker-compose up -d
 
-# 实时跟踪日志
-docker-compose logs -f app
+# 验证用户已创建
+docker exec claude-agent-http id
+# 应该显示：uid=1000(claudeuser) gid=1000 groups=1000
+
+# 验证 home 目录存在
+docker exec claude-agent-http ls -la /home/
+# 应该显示：drwx------ claudeuser claudeuser /home/claudeuser
 ```
 
-### 重启服务
-
+**预防措施：**
+拉取更新后始终重新构建镜像：
 ```bash
-# 重启服务
+git pull
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+#### 2. 健康检查返回 503
+
+**症状：**
+- `curl http://localhost:8000/health` 返回 503
+- 容器持续重启
+- 日志显示 "Fatal error in message reader"
+
+**可能原因及解决方案：**
+
+**a) 缺少 HOME 环境变量：**
+```bash
+# 检查 HOME 是否正确设置
+docker exec claude-agent-http env | grep HOME
+# 应该显示：HOME=/home/claudeuser
+
+# 如果缺失，验证 docker-compose.yml 中有：
+environment:
+  HOME: /home/claudeuser
+```
+
+**b) 未配置 ANTHROPIC_API_KEY：**
+```bash
+# 检查 API key 是否设置
+docker exec claude-agent-http env | grep ANTHROPIC_API_KEY
+
+# 在 .env 文件中配置
+echo "ANTHROPIC_API_KEY=your_key_here" >> .env
+
+# 重启
 docker-compose restart
-
-# 重新构建并启动
-docker-compose up -d --build
 ```
 
-### 端口被占用
+**c) 容器用户不匹配：**
+```bash
+# 检查容器用户
+docker exec claude-agent-http id
+
+# 应该是：uid=1000(claudeuser) gid=1000
+# 如果不同，重新构建镜像（参见问题 #1）
+```
+
+#### 3. 端口已被占用
 
 如果启动时遇到 `address already in use` 错误：
 
@@ -381,43 +436,226 @@ docker-compose up -d
 API_PORT=8001
 ```
 
-### 权限问题
+#### 4. 绑定挂载权限错误
 
-如果遇到权限错误：
+**症状：**
+- "Directory /data/claude-users is NOT writable"
+- "Directory /data/db is NOT writable"
 
+**绑定挂载解决方案：**
 ```bash
-# 检查目录权限
-ls -la /opt/claude-code-http/
+# 检查 .env 中的 UID/GID 是否匹配你的用户
+id -u  # 获取你的 UID
+id -g  # 获取你的 GID
 
-# 修复权限
-sudo chown -R $USER:$USER /opt/claude-code-http
+# 更新 .env
+echo "UID=$(id -u)" >> .env
+echo "GID=$(id -g)" >> .env
+
+# 创建并修复宿主机目录权限
+mkdir -p ~/.claude-code-http/{claude-users,db}
+chown -R $(id -u):$(id -g) ~/.claude-code-http/
+
+# 或者使用系统级目录
+sudo mkdir -p /opt/claude-code-http/{claude-users,db}
+sudo chown -R $(id -u):$(id -g) /opt/claude-code-http/
+
+# 重启
+docker-compose restart
 ```
 
-### 数据库连接问题（PostgreSQL）
-
+**命名卷解决方案（默认）：**
 ```bash
-# 检查数据库是否就绪
-docker-compose -f docker-compose.postgres.yml exec postgres pg_isready -U postgres
+# 如果存在，删除绑定挂载覆盖文件
+rm -f docker-compose.override.yml
 
-# 连接数据库
-docker-compose -f docker-compose.postgres.yml exec postgres psql -U postgres -d claude_agent
+# 确保 UID/GID 为 1000（默认）
+echo "UID=1000" >> .env
+echo "GID=1000" >> .env
+
+# 重启
+docker-compose down
+docker-compose up -d
+```
+
+#### 5. 数据库连接失败（PostgreSQL）
+
+**症状：**
+- "could not connect to server"
+- "Connection refused"
+
+**解决方案：**
+```bash
+# 检查 PostgreSQL 容器是否运行
+docker-compose -f docker-compose.yml -f docker-compose.postgres.yml ps
+
+# 检查数据库是否健康
+docker-compose -f docker-compose.yml -f docker-compose.postgres.yml exec postgres pg_isready -U postgres
+
+# 查看 PostgreSQL 日志
+docker-compose -f docker-compose.yml -f docker-compose.postgres.yml logs postgres
+
+# 验证环境变量
+docker exec claude-agent-http env | grep PG_
+
+# 手动连接数据库
+docker-compose -f docker-compose.yml -f docker-compose.postgres.yml exec postgres psql -U postgres -d claude_agent
 
 # 查看数据库表
 \dt
 ```
 
-### 清理并重新构建
+#### 6. 容器持续重启
+
+**诊断：**
+```bash
+# 检查容器状态
+docker-compose ps
+
+# 查看最近的日志
+docker-compose logs --tail=50
+
+# 检查容器退出代码
+docker inspect claude-agent-http | grep ExitCode
+
+# 常见退出代码：
+# 1 - 应用程序错误（检查日志）
+# 137 - 被系统杀死（OOM 或手动 kill）
+# 139 - 段错误
+```
+
+**解决方案：**
+```bash
+# 清理所有内容并重新开始
+docker-compose down
+docker volume prune  # 小心：会删除未使用的卷
+docker-compose build --no-cache
+docker-compose up -d
+
+# 如果是 OOM（内存不足），增加 Docker 内存限制
+# Docker Desktop：设置 -> 资源 -> 内存
+```
+
+### 调试命令
+
+#### 查看日志
 
 ```bash
-# 停止并删除所有容器
+# 查看所有服务日志
+docker-compose logs
+
+# 查看 API 服务日志
+docker-compose logs app
+
+# 查看 PostgreSQL 日志（如使用）
+docker-compose -f docker-compose.yml -f docker-compose.postgres.yml logs postgres
+
+# 实时跟踪日志
+docker-compose logs -f app
+
+# 查看最后 50 行
+docker-compose logs --tail=50 app
+```
+
+#### 检查容器
+
+```bash
+# 检查容器状态
+docker-compose ps
+
+# 检查容器配置
+docker inspect claude-agent-http
+
+# 检查资源使用
+docker stats claude-agent-http
+
+# 检查卷
+docker volume ls | grep claude
+
+# 检查卷详情
+docker volume inspect claude-agent-http_claude-users
+```
+
+#### 容器内调试
+
+```bash
+# 在运行的容器中打开 shell
+docker exec -it claude-agent-http bash
+
+# 检查用户和权限
+id
+env | grep HOME
+ls -la /home/claudeuser/
+ls -la /data/
+
+# 检查进程
+ps aux
+
+# 检查网络
+netstat -tlnp
+curl localhost:8000/health
+
+# 退出 shell
+exit
+```
+
+### 完全清理并重新构建
+
+如果所有方法都失败，执行完全清理：
+
+```bash
+# 1. 停止所有容器
 docker-compose down
 
-# 删除镜像并重新构建
+# 2. 删除容器和卷
+docker-compose down -v
+
+# 3. 删除镜像
+docker rmi claude-agent-http_app
+
+# 4. 清理构建缓存（可选）
+docker builder prune -a
+
+# 5. 从头重新构建
 docker-compose build --no-cache
 
-# 重新启动
+# 6. 启动服务
 docker-compose up -d
+
+# 7. 检查日志
+docker-compose logs -f
 ```
+
+### 获取帮助
+
+如果问题仍然存在：
+
+1. **收集信息：**
+   ```bash
+   # 系统信息
+   docker version
+   docker-compose version
+   uname -a
+
+   # 容器日志
+   docker-compose logs --tail=100 > logs.txt
+
+   # 容器状态
+   docker-compose ps
+
+   # 卷信息
+   docker volume ls | grep claude
+   ```
+
+2. **检查文档：**
+   - 项目 README：`README_CN.md`
+   - 配置指南：`CLAUDE.md`
+   - API 示例：`docs/API_EXAMPLES.md`
+
+3. **报告问题：**
+   - 使用收集的信息创建 GitHub Issue
+   - 包含错误消息和日志
+   - 描述重现步骤
 
 ## 环境变量完整列表
 

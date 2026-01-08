@@ -288,33 +288,88 @@ docker run -d \
 
 ## Troubleshooting
 
-### View Logs
+### Common Issues
 
+#### 1. Permission Denied Error: `EACCES: permission denied, mkdir '/home/claudeuser'`
+
+**Symptoms:**
+- Session creation fails with 503 Service Unavailable
+- Logs show: `EACCES: permission denied, mkdir '/home/claudeuser'`
+- Health check returns error
+
+**Root Cause:**
+Using outdated Docker image that doesn't have `claudeuser` user configured.
+
+**Solution:**
 ```bash
-# View all service logs
-docker-compose logs
+# Stop containers
+docker-compose down
 
-# View API service logs
-docker-compose logs app
+# Rebuild image from scratch (no cache)
+docker-compose build --no-cache
 
-# View PostgreSQL logs (if used)
-docker-compose -f docker-compose.postgres.yml logs postgres
+# Start services
+docker-compose up -d
 
-# Follow logs in real-time
-docker-compose logs -f app
+# Verify user is created
+docker exec claude-agent-http id
+# Should show: uid=1000(claudeuser) gid=1000 groups=1000
+
+# Verify home directory exists
+docker exec claude-agent-http ls -la /home/
+# Should show: drwx------ claudeuser claudeuser /home/claudeuser
 ```
 
-### Restart Services
-
+**Prevention:**
+Always rebuild the image after pulling updates:
 ```bash
-# Restart services
+git pull
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+#### 2. Health Check Returns 503
+
+**Symptoms:**
+- `curl http://localhost:8000/health` returns 503
+- Container keeps restarting
+- Logs show "Fatal error in message reader"
+
+**Possible Causes & Solutions:**
+
+**a) Missing HOME environment variable:**
+```bash
+# Check if HOME is set correctly
+docker exec claude-agent-http env | grep HOME
+# Should show: HOME=/home/claudeuser
+
+# If missing, verify docker-compose.yml has:
+environment:
+  HOME: /home/claudeuser
+```
+
+**b) ANTHROPIC_API_KEY not configured:**
+```bash
+# Check if API key is set
+docker exec claude-agent-http env | grep ANTHROPIC_API_KEY
+
+# Configure in .env file
+echo "ANTHROPIC_API_KEY=your_key_here" >> .env
+
+# Restart
 docker-compose restart
-
-# Rebuild and start
-docker-compose up -d --build
 ```
 
-### Port Already in Use
+**c) Container user mismatch:**
+```bash
+# Check container user
+docker exec claude-agent-http id
+
+# Should be: uid=1000(claudeuser) gid=1000
+# If different, rebuild image (see issue #1)
+```
+
+#### 3. Port Already in Use
 
 If you encounter `address already in use` error when starting:
 
@@ -337,43 +392,228 @@ docker-compose up -d
 API_PORT=8001
 ```
 
-### Permission Issues
+#### 4. Bind Mounts Permission Errors
 
-If you encounter permission errors:
+**Symptoms:**
+- "Directory /data/claude-users is NOT writable"
+- "Directory /data/db is NOT writable"
 
+**Solution for Bind Mounts:**
 ```bash
-# Check directory permissions
-ls -la /opt/claude-code-http/
+# Check UID/GID in .env matches your user
+id -u  # Get your UID
+id -g  # Get your GID
 
-# Fix permissions
-sudo chown -R $USER:$USER /opt/claude-code-http
+# Update .env
+echo "UID=$(id -u)" >> .env
+echo "GID=$(id -g)" >> .env
+
+# Create and fix host directory permissions
+mkdir -p ~/.claude-code-http/{claude-users,db}
+chown -R $(id -u):$(id -g) ~/.claude-code-http/
+
+# Or for system-wide directory
+sudo mkdir -p /opt/claude-code-http/{claude-users,db}
+sudo chown -R $(id -u):$(id -g) /opt/claude-code-http/
+
+# Restart
+docker-compose restart
 ```
 
-### Database Connection Issues (PostgreSQL)
-
+**Solution for Named Volumes (Default):**
 ```bash
-# Check if database is ready
-docker-compose -f docker-compose.postgres.yml exec postgres pg_isready -U postgres
+# Remove bind mounts override if exists
+rm -f docker-compose.override.yml
 
-# Connect to database
-docker-compose -f docker-compose.postgres.yml exec postgres psql -U postgres -d claude_agent
+# Ensure UID/GID is 1000 (default)
+echo "UID=1000" >> .env
+echo "GID=1000" >> .env
+
+# Restart
+docker-compose down
+docker-compose up -d
+```
+
+#### 5. Database Connection Failed (PostgreSQL)
+
+**Symptoms:**
+- "could not connect to server"
+- "Connection refused"
+
+**Solution:**
+```bash
+# Check if PostgreSQL container is running
+docker-compose -f docker-compose.yml -f docker-compose.postgres.yml ps
+
+# Check if database is healthy
+docker-compose -f docker-compose.yml -f docker-compose.postgres.yml exec postgres pg_isready -U postgres
+
+# View PostgreSQL logs
+docker-compose -f docker-compose.yml -f docker-compose.postgres.yml logs postgres
+
+# Verify environment variables
+docker exec claude-agent-http env | grep PG_
+
+# Connect to database manually
+docker-compose -f docker-compose.yml -f docker-compose.postgres.yml exec postgres psql -U postgres -d claude_agent
 
 # View database tables
 \dt
 ```
 
-### Clean and Rebuild
+#### 6. Container Keeps Restarting
+
+**Diagnosis:**
+```bash
+# Check container status
+docker-compose ps
+
+# View recent logs
+docker-compose logs --tail=50
+
+# Check container exit code
+docker inspect claude-agent-http | grep ExitCode
+
+# Common exit codes:
+# 1 - Application error (check logs)
+# 137 - Killed by system (OOM or manual kill)
+# 139 - Segmentation fault
+```
+
+**Solutions:**
+```bash
+# Clear all and start fresh
+docker-compose down
+docker volume prune  # Careful: removes unused volumes
+docker-compose build --no-cache
+docker-compose up -d
+
+# If OOM (Out of Memory), increase Docker memory limit
+# Docker Desktop: Settings -> Resources -> Memory
+```
+
+### Debugging Commands
+
+#### View Logs
 
 ```bash
-# Stop and remove all containers
+# View all service logs
+docker-compose logs
+
+# View API service logs
+docker-compose logs app
+
+# View PostgreSQL logs (if used)
+docker-compose -f docker-compose.yml -f docker-compose.postgres.yml logs postgres
+
+# Follow logs in real-time
+docker-compose logs -f app
+
+# View last 50 lines
+docker-compose logs --tail=50 app
+```
+
+#### Inspect Container
+
+```bash
+# Check container status
+docker-compose ps
+
+# Inspect container configuration
+docker inspect claude-agent-http
+
+# Check resource usage
+docker stats claude-agent-http
+
+# Check volumes
+docker volume ls | grep claude
+
+# Inspect volume
+docker volume inspect claude-agent-http_claude-users
+```
+
+#### Debug Inside Container
+
+```bash
+# Open shell in running container
+docker exec -it claude-agent-http bash
+
+# Check user and permissions
+id
+env | grep HOME
+ls -la /home/claudeuser/
+ls -la /data/
+
+# Check processes
+ps aux
+
+# Check network
+netstat -tlnp
+curl localhost:8000/health
+
+# Exit shell
+exit
+```
+
+### Complete Clean and Rebuild
+
+If all else fails, perform a complete cleanup:
+
+```bash
+# 1. Stop all containers
 docker-compose down
 
-# Remove image and rebuild
+# 2. Remove containers and volumes
+docker-compose down -v
+
+# 3. Remove images
+docker rmi claude-agent-http_app
+
+# 4. Clean build cache (optional)
+docker builder prune -a
+
+# 5. Rebuild from scratch
 docker-compose build --no-cache
 
-# Restart
+# 6. Start services
 docker-compose up -d
+
+# 7. Check logs
+docker-compose logs -f
 ```
+
+### Getting Help
+
+If the issue persists:
+
+1. **Collect Information:**
+   ```bash
+   # System info
+   docker version
+   docker-compose version
+   uname -a
+
+   # Container logs
+   docker-compose logs --tail=100 > logs.txt
+
+   # Container status
+   docker-compose ps
+
+   # Volume info
+   docker volume ls | grep claude
+   ```
+
+2. **Check Documentation:**
+   - Project README: `README.md`
+   - Configuration guide: `CLAUDE.md`
+   - API examples: `docs/API_EXAMPLES.md`
+
+3. **Report Issue:**
+   - Create GitHub Issue with collected information
+   - Include error messages and logs
+   - Describe steps to reproduce
+
+
 
 ## Complete Environment Variable List
 
