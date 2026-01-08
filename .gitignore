@@ -36,6 +36,9 @@ sessions.db
 # 环境变量文件（包含敏感信息）
 .env
 
+# 数据目录
+data/
+
 # 测试和临时文件
 test/
 daemon.json
@@ -53,3 +56,6 @@ Thumbs.db
 
 # 日志
 *.log
+
+# Docker override files (user-specific)
+docker-compose.override.yml
