@@ -12,48 +12,22 @@
 #      docker-compose up -d
 #
 #   3. PostgreSQL (Enterprise):
-#      docker-compose --profile postgres up -d
+#      docker-compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
 #
 #   4. Use helper script (validates configuration):
-#      ./docker-start.sh
+#      ./docker-start.sh                # SQLite mode
+#      ./docker-start.sh --postgres     # PostgreSQL mode
 #
 # Configuration:
 #   - Edit .env file to set your configuration
-#   - Set CLAUDE_AGENT_SESSION_STORAGE: sqlite | postgresql
-#   - For PostgreSQL, use --profile postgres
+#   - Default storage: SQLite (recommended for most use cases)
+#   - For PostgreSQL: use docker-compose.postgres.yml
 #
 # ============================================
 
 version: '3.8'
 
 services:
-  # ============================================
-  # PostgreSQL Database (Optional)
-  # ============================================
-  # Enable with: docker-compose --profile postgres up -d
-  postgres:
-    image: postgres:15-alpine
-    container_name: claude-agent-postgres
-    restart: unless-stopped
-    profiles:
-      - postgres
-    environment:
-      POSTGRES_DB: ${CLAUDE_AGENT_SESSION_PG_DATABASE:-claude_agent}
-      POSTGRES_USER: ${CLAUDE_AGENT_SESSION_PG_USER:-postgres}
-      POSTGRES_PASSWORD: ${CLAUDE_AGENT_SESSION_PG_PASSWORD:-postgres}
-      PGDATA: /var/lib/postgresql/data/pgdata
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${CLAUDE_AGENT_SESSION_PG_USER:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - claude-network
-
   # ============================================
   # Claude Agent HTTP API Service
   # ============================================
@@ -68,10 +42,6 @@ services:
     # UID/GID should match your host user for bind mounts
     # For named volumes, use 1000:1000 (default claudeuser)
     user: "${UID:-1000}:${GID:-1000}"
-
-    # Note: When using PostgreSQL mode (--profile postgres),
-    # the app will wait for postgres to be healthy
-    # In SQLite mode (default), postgres is not started
 
     environment:
       # ============================================
@@ -147,8 +117,6 @@ volumes:
   claude-users:
     driver: local
   claude-db:
-    driver: local
-  postgres_data:
     driver: local
 
 # ============================================
