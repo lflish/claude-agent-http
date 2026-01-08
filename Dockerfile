@@ -14,8 +14,16 @@ RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r re
 # Copy application code
 COPY . .
 
-# Create data directories
-RUN mkdir -p /data/claude-users /data/db
+# Create non-root user and group
+RUN groupadd -r claudeuser && \
+    useradd -r -g claudeuser -u 1000 -m -s /bin/bash claudeuser
+
+# Create data directories and set ownership
+RUN mkdir -p /data/claude-users /data/db && \
+    chown -R claudeuser:claudeuser /data /app
+
+# Switch to non-root user
+USER claudeuser
 
 # Expose API port
 EXPOSE 8000

@@ -30,6 +30,8 @@ services:
       dockerfile: Dockerfile
     container_name: claude-agent-http
     restart: unless-stopped
+    # Run as non-root user (matches UID 1000 in Dockerfile)
+    user: "${UID:-1000}:${GID:-1000}"
     depends_on:
       postgres:
         condition: service_healthy

@@ -12,9 +12,15 @@
 # 创建数据目录
 sudo mkdir -p /opt/claude-code-http/{claude-users,db}
 
-# 设置目录权限
+# 设置目录权限（如有需要，替换为你的用户）
 sudo chown -R $USER:$USER /opt/claude-code-http
+
+# 可选：设置特定的 UID/GID（容器中默认为 1000:1000）
+# 这确保容器用户（claudeuser）可以访问挂载的卷
+# 如果你的用户有不同的 UID，在 .env 文件中设置：UID=$(id -u) GID=$(id -g)
 ```
+
+> **注意**：容器以非 root 用户 `claudeuser`（UID 1000）运行以提高安全性。如果你的宿主机用户有不同的 UID，请在 `.env` 文件中配置以避免权限问题。
 
 ### 2. 准备环境文件
 

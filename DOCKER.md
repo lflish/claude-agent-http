@@ -12,9 +12,15 @@ English | [简体中文](DOCKER_CN.md)
 # Create data directories
 sudo mkdir -p /opt/claude-code-http/{claude-users,db}
 
-# Set directory permissions
+# Set directory permissions (replace with your user if needed)
 sudo chown -R $USER:$USER /opt/claude-code-http
+
+# Optional: Set specific UID/GID (default is 1000:1000 in container)
+# This ensures the container user (claudeuser) can access the mounted volumes
+# If your user has a different UID, set it in .env file: UID=$(id -u) GID=$(id -g)
 ```
+
+> **Note**: The container runs as non-root user `claudeuser` (UID 1000) for security. If your host user has a different UID, configure it in the `.env` file to avoid permission issues.
 
 ### 2. Prepare Environment File
 
