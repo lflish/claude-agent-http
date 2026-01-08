@@ -112,6 +112,8 @@ docker-compose up -d
 curl http://localhost:8000/health
 ```
 
+**Troubleshooting**: If you encounter any issues during Docker deployment, please refer to the [Troubleshooting section in DOCKER.md](DOCKER.md#troubleshooting) for common problems and solutions.
+
 ## API Reference
 
 > **Postman Collection**: Import `postman_collection.json` to test all APIs in Postman.

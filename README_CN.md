@@ -112,6 +112,8 @@ docker-compose up -d
 curl http://localhost:8000/health
 ```
 
+**故障排查**：如果在 Docker 部署过程中遇到任何问题，请参考 [DOCKER_CN.md 中的故障排查章节](DOCKER_CN.md#故障排查)，查看常见问题和解决方案。
+
 ## API 参考
 
 > **Postman 集合**：导入 `postman_collection.json` 在 Postman 中测试所有 API。
