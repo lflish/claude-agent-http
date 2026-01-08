@@ -12,11 +12,25 @@ Claude Agent HTTP is a Python wrapper around the Claude Agent SDK, providing an 
 # Install dependencies
 pip install -r requirements.txt
 
-# Run API server
+# Run API server (development)
 python -m claude_agent_http.main
 
-# Or with uvicorn directly
-uvicorn claude_agent_http.main:app --host 0.0.0.0 --port 8000
+# Or with uvicorn directly (with auto-reload)
+uvicorn claude_agent_http.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Docker deployment (SQLite)
+cp .env.example .env
+# Edit .env and set ANTHROPIC_API_KEY
+docker-compose up -d
+
+# Docker deployment (PostgreSQL)
+docker-compose -f docker-compose.postgres.yml up -d
+
+# Docker build only
+docker build -t claude-agent-http .
+
+# Check service health
+curl http://localhost:8000/health
 
 # Test API (after server is running)
 curl -X POST http://localhost:8000/api/v1/sessions \
@@ -97,10 +111,54 @@ mcp_servers: {}           # Global MCP servers for all sessions
 plugins: []               # Global plugins for all sessions
 ```
 
-Environment variables override config: `CLAUDE_AGENT_USER_BASE_DIR`, `CLAUDE_AGENT_SESSION_STORAGE`, etc.
+**Environment Variables** (override config.yaml):
+- `ANTHROPIC_API_KEY` (required) - Your Anthropic API key
+- `ANTHROPIC_BASE_URL` - Custom API endpoint (e.g., for proxies)
+- `ANTHROPIC_AUTH_TOKEN` - Alternative to API_KEY for custom endpoints
+- `ANTHROPIC_MODEL` - Override default model
+- `CLAUDE_AGENT_USER_BASE_DIR` - Override base directory
+- `CLAUDE_AGENT_SESSION_STORAGE` - Override storage backend
+- `CLAUDE_AGENT_SESSION_TTL` - Override session TTL
+- `CLAUDE_AGENT_API_PORT` - Override API port
+
+**Priority**: Environment variables > config.yaml > defaults
 
 ### Security
 
 - Path traversal (`..`) blocked in `security.py`
 - `user_id` validated: alphanumeric, underscore, hyphen only
 - `subdir` cannot be absolute or contain `..`
+- `.env` file (contains secrets) excluded via `.gitignore`
+
+## Important Implementation Notes
+
+### Session Lifecycle
+1. **Create**: `POST /api/v1/sessions` → returns session_id, creates ClaudeSDKClient instance
+2. **Use**: `POST /api/v1/chat` or `/chat/stream` → acquires per-session lock, prevents concurrent messages
+3. **Resume**: `POST /api/v1/sessions/{id}/resume` → reloads from storage, recreates ClaudeSDKClient
+4. **Close**: `DELETE /api/v1/sessions/{id}` → removes from memory, keeps metadata in storage
+
+### Dual-Lock Pattern (agent.py)
+- `_clients_lock`: Protects the `_clients` dict during add/remove operations
+- `_session_locks[id]`: Per-session lock prevents message interleaving within a session
+- Always acquire session lock BEFORE sending messages via ClaudeSDKClient
+
+### Storage Abstraction
+All storage backends implement `SessionStorage` interface (storage/base.py):
+- `save()`, `get()`, `delete()`, `touch()`, `list_sessions()`
+- Memory: Dev/testing only, data lost on restart
+- SQLite: Single-instance, file-based persistence
+- PostgreSQL: Multi-instance, production-ready with proper connection pooling
+
+### Path Security Flow
+1. API receives `user_id` + optional `subdir`
+2. `security.build_cwd()` validates and constructs: `{base_dir}/{user_id}/{subdir}`
+3. `security.ensure_directory()` creates if needed (when `auto_create_dir=true`)
+4. Path passed to ClaudeSDKClient as `cwd` option
+
+## Documentation References
+
+- Full API examples: `docs/API_EXAMPLES.md`
+- Docker deployment: `DOCKER.md` (English), `DOCKER_CN.md` (中文)
+- Postman collection: `postman_collection.json`
+- User README: `README.md` (English), `README_CN.md` (中文)
