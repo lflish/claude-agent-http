@@ -23,10 +23,13 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 RUN groupadd -r claudeuser && \
     useradd -r -g claudeuser -u 1000 -m -s /bin/bash claudeuser
 
+# Set HOME environment variable for claudeuser
+ENV HOME=/home/claudeuser
+
 # Create data directories with proper permissions
 # These will be used if volumes are not mounted
 RUN mkdir -p /data/claude-users /data/db && \
-    chown -R claudeuser:claudeuser /data /app
+    chown -R claudeuser:claudeuser /data /app /home/claudeuser
 
 # Note: Do not switch to non-root user here
 # The user will be specified in docker-compose via the 'user' parameter
