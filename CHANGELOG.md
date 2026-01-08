@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-01-08
+
 ### Added
 - Comprehensive troubleshooting section in Docker documentation (DOCKER.md and DOCKER_CN.md)
   - 6 common issues with detailed root causes and solutions
@@ -61,5 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker deployment support
 - API documentation and Postman collection
 
-[Unreleased]: https://github.com/lflish/claude-agent-http/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/lflish/claude-agent-http/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/lflish/claude-agent-http/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/lflish/claude-agent-http/releases/tag/v1.0.0
