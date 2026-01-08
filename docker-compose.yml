@@ -38,10 +38,9 @@ services:
     container_name: claude-agent-http
     restart: unless-stopped
 
-    # Run as non-root user for security
-    # UID/GID should match your host user for bind mounts
-    # For named volumes, use 1000:1000 (default claudeuser)
-    user: "${UID:-1000}:${GID:-1000}"
+    # Note: Container starts as root, then switches to claudeuser in entrypoint
+    # This allows entrypoint to fix volume permissions before switching users
+    # For bind mounts, set UID/GID in .env to match your host user
 
     environment:
       # ============================================

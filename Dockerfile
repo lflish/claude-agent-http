@@ -5,6 +5,13 @@ FROM python:3.12-slim AS base
 # Set working directory
 WORKDIR /app
 
+# Install system dependencies including gosu for user switching
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        gosu \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy requirements first for better caching
 COPY requirements.txt .
 
