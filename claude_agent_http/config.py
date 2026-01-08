@@ -97,6 +97,25 @@ def load_config(config_path: str = "config.yaml") -> Config:
     if os.getenv("CLAUDE_AGENT_SESSION_TTL"):
         config.session.ttl = int(os.getenv("CLAUDE_AGENT_SESSION_TTL"))
 
+    if os.getenv("CLAUDE_AGENT_SESSION_SQLITE_PATH"):
+        config.session.sqlite_path = os.getenv("CLAUDE_AGENT_SESSION_SQLITE_PATH")
+
+    # PostgreSQL settings
+    if os.getenv("CLAUDE_AGENT_SESSION_PG_HOST"):
+        config.session.pg_host = os.getenv("CLAUDE_AGENT_SESSION_PG_HOST")
+
+    if os.getenv("CLAUDE_AGENT_SESSION_PG_PORT"):
+        config.session.pg_port = int(os.getenv("CLAUDE_AGENT_SESSION_PG_PORT"))
+
+    if os.getenv("CLAUDE_AGENT_SESSION_PG_DATABASE"):
+        config.session.pg_database = os.getenv("CLAUDE_AGENT_SESSION_PG_DATABASE")
+
+    if os.getenv("CLAUDE_AGENT_SESSION_PG_USER"):
+        config.session.pg_user = os.getenv("CLAUDE_AGENT_SESSION_PG_USER")
+
+    if os.getenv("CLAUDE_AGENT_SESSION_PG_PASSWORD"):
+        config.session.pg_password = os.getenv("CLAUDE_AGENT_SESSION_PG_PASSWORD")
+
     if os.getenv("CLAUDE_AGENT_API_PORT"):
         config.api.port = int(os.getenv("CLAUDE_AGENT_API_PORT"))
 

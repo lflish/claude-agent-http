@@ -18,19 +18,25 @@ python -m claude_agent_http.main
 # Or with uvicorn directly (with auto-reload)
 uvicorn claude_agent_http.main:app --host 0.0.0.0 --port 8000 --reload
 
-# Docker deployment (SQLite)
+# Docker deployment (SQLite with named volumes - recommended)
 cp .env.example .env
 # Edit .env and set ANTHROPIC_API_KEY
 docker-compose up -d
 
+# Docker deployment (SQLite with bind mounts - requires host permission setup)
+docker-compose -f docker-compose.bindmounts.yml up -d
+
 # Docker deployment (PostgreSQL)
 docker-compose -f docker-compose.postgres.yml up -d
 
-# Docker build only
-docker build -t claude-agent-http .
+# Docker rebuild (no cache)
+docker-compose build --no-cache
 
 # Check service health
 curl http://localhost:8000/health
+
+# View Docker logs
+docker-compose logs -f
 
 # Test API (after server is running)
 curl -X POST http://localhost:8000/api/v1/sessions \
@@ -117,8 +123,14 @@ plugins: []               # Global plugins for all sessions
 - `ANTHROPIC_AUTH_TOKEN` - Alternative to API_KEY for custom endpoints
 - `ANTHROPIC_MODEL` - Override default model
 - `CLAUDE_AGENT_USER_BASE_DIR` - Override base directory
-- `CLAUDE_AGENT_SESSION_STORAGE` - Override storage backend
-- `CLAUDE_AGENT_SESSION_TTL` - Override session TTL
+- `CLAUDE_AGENT_SESSION_STORAGE` - Override storage backend (memory|sqlite|postgresql)
+- `CLAUDE_AGENT_SESSION_TTL` - Override session TTL (seconds)
+- `CLAUDE_AGENT_SESSION_SQLITE_PATH` - Override SQLite database path
+- `CLAUDE_AGENT_SESSION_PG_HOST` - PostgreSQL host
+- `CLAUDE_AGENT_SESSION_PG_PORT` - PostgreSQL port
+- `CLAUDE_AGENT_SESSION_PG_DATABASE` - PostgreSQL database name
+- `CLAUDE_AGENT_SESSION_PG_USER` - PostgreSQL username
+- `CLAUDE_AGENT_SESSION_PG_PASSWORD` - PostgreSQL password
 - `CLAUDE_AGENT_API_PORT` - Override API port
 
 **Priority**: Environment variables > config.yaml > defaults
@@ -155,6 +167,33 @@ All storage backends implement `SessionStorage` interface (storage/base.py):
 2. `security.build_cwd()` validates and constructs: `{base_dir}/{user_id}/{subdir}`
 3. `security.ensure_directory()` creates if needed (when `auto_create_dir=true`)
 4. Path passed to ClaudeSDKClient as `cwd` option
+
+### Docker Deployment Architecture
+
+**Non-Root User Security**: Containers run as non-root user `claudeuser` (UID 1000) for security.
+
+**Volume Strategies**:
+1. **Named Volumes** (default `docker-compose.yml`): Docker manages permissions automatically
+   - Use UID=1000, GID=1000 in .env (matches claudeuser)
+   - Best for: Production deployments, portability
+   - Database: `/data/db/sessions.db`
+   - User files: `/data/claude-users/{user_id}/`
+
+2. **Bind Mounts** (`docker-compose.bindmounts.yml`): Direct host filesystem access
+   - Requires: `sudo chown -R $(id -u):$(id -g) /opt/claude-code-http/`
+   - Set UID/GID in .env to match your host user
+   - Best for: Development, when you need direct file access
+
+**Entrypoint Script** (`docker-entrypoint.sh`):
+- Validates write permissions on startup
+- Provides clear error messages if permissions are wrong
+- Tests `/data/claude-users` and `/data/db` directories
+
+**Configuration Loading Order**:
+1. Dockerfile builds with `config.yaml` defaults
+2. docker-compose sets environment variables (highest priority)
+3. Container starts with entrypoint checking permissions
+4. Application loads config with env var overrides
 
 ## Documentation References
 
