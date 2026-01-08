@@ -46,6 +46,9 @@ services:
   # Override app service to depend on postgres
   # ============================================
   app:
+    environment:
+      # Ensure HOME is set for non-root user
+      HOME: /home/claudeuser
     depends_on:
       postgres:
         condition: service_healthy

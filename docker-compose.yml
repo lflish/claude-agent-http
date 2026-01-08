@@ -45,6 +45,12 @@ services:
 
     environment:
       # ============================================
+      # System Configuration
+      # ============================================
+      # Set HOME for non-root user to avoid permission issues
+      HOME: /home/claudeuser
+
+      # ============================================
       # User Directory Configuration
       # ============================================
       CLAUDE_AGENT_USER_BASE_DIR: ${CLAUDE_AGENT_USER_BASE_DIR:-/data/claude-users}
