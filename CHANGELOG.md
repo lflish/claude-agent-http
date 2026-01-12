@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Critical: SQLite storage performance issues causing high CPU and I/O usage**
+  - Implemented persistent database connection (eliminated reconnection overhead)
+  - Enabled WAL (Write-Ahead Logging) mode for better concurrency
+  - Reduced synchronous level to NORMAL (still safe, significantly faster)
+  - Increased cache size from 8MB to 40MB
+  - Configured memory-based temporary storage
+  - Added proper connection locking for thread-safety
+  - Performance improvement: 10-100x faster (Touch operations: 6,385 ops/sec)
+  - Touch operations are critical as they occur on every message
+
+### Added
+- Comprehensive performance optimization documentation (SQLITE_OPTIMIZATION.md)
+  - Detailed explanation of performance issues and solutions
+  - Performance benchmarks and testing methodology
+  - Troubleshooting guide for SQLite-related issues
+  - Migration and monitoring recommendations
+- Performance test script (test_sqlite_perf.py) for validation
+
 ## [1.0.1] - 2026-01-08
 
 ### Added

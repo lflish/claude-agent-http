@@ -3,6 +3,7 @@ SQLite session storage implementation.
 """
 import json
 import aiosqlite
+import asyncio
 from datetime import datetime, timedelta
 from typing import Optional, List
 
@@ -25,14 +26,39 @@ class SQLiteStorage(SessionStorage):
         self.db_path = db_path
         self.ttl = ttl
         self._initialized = False
+        self._db: Optional[aiosqlite.Connection] = None
+        self._db_lock = asyncio.Lock()
 
     async def _ensure_initialized(self) -> None:
-        """Initialize database schema if not already done."""
+        """Initialize database schema and connection if not already done."""
         if self._initialized:
             return
 
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("""
+        async with self._db_lock:
+            if self._initialized:
+                return
+
+            # Create persistent connection
+            self._db = await aiosqlite.connect(self.db_path)
+
+            # Enable WAL mode for better concurrency and performance
+            await self._db.execute("PRAGMA journal_mode=WAL")
+
+            # Reduce fsync calls (still safe, faster)
+            await self._db.execute("PRAGMA synchronous=NORMAL")
+
+            # Increase cache size (default is 2000 pages, ~8MB)
+            # Setting to 10000 pages (~40MB)
+            await self._db.execute("PRAGMA cache_size=-40000")
+
+            # Use memory for temp tables
+            await self._db.execute("PRAGMA temp_store=MEMORY")
+
+            # Enable foreign keys (good practice)
+            await self._db.execute("PRAGMA foreign_keys=ON")
+
+            # Create tables and indexes
+            await self._db.execute("""
                 CREATE TABLE IF NOT EXISTS sessions (
                     session_id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
@@ -54,25 +80,25 @@ class SQLiteStorage(SessionStorage):
                     metadata TEXT
                 )
             """)
-            await db.execute("""
+            await self._db.execute("""
                 CREATE INDEX IF NOT EXISTS idx_sessions_user_id
                 ON sessions(user_id)
             """)
-            await db.execute("""
+            await self._db.execute("""
                 CREATE INDEX IF NOT EXISTS idx_sessions_last_active
                 ON sessions(last_active_at)
             """)
-            await db.commit()
+            await self._db.commit()
 
-        self._initialized = True
+            self._initialized = True
 
     async def save(self, session_id: str, session_info: SessionInfo) -> bool:
         """Save session information."""
         await self._ensure_initialized()
 
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                await db.execute("""
+            async with self._db_lock:
+                await self._db.execute("""
                     INSERT OR REPLACE INTO sessions (
                         session_id, user_id, subdir, cwd,
                         system_prompt, mcp_servers, plugins, model,
@@ -100,7 +126,7 @@ class SQLiteStorage(SessionStorage):
                     session_info.message_count,
                     json.dumps(session_info.metadata)
                 ))
-                await db.commit()
+                await self._db.commit()
             return True
         except Exception as e:
             raise StorageError(f"Failed to save session: {e}")
@@ -110,9 +136,9 @@ class SQLiteStorage(SessionStorage):
         await self._ensure_initialized()
 
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                db.row_factory = aiosqlite.Row
-                async with db.execute(
+            async with self._db_lock:
+                self._db.row_factory = aiosqlite.Row
+                async with self._db.execute(
                     "SELECT * FROM sessions WHERE session_id = ?",
                     (session_id,)
                 ) as cursor:
@@ -126,7 +152,12 @@ class SQLiteStorage(SessionStorage):
                     if self.ttl > 0:
                         expired_at = last_active + timedelta(seconds=self.ttl)
                         if datetime.now() > expired_at:
-                            await self.delete(session_id)
+                            # Delete expired session (without re-acquiring lock)
+                            await self._db.execute(
+                                "DELETE FROM sessions WHERE session_id = ?",
+                                (session_id,)
+                            )
+                            await self._db.commit()
                             return None
 
                     return SessionInfo(
@@ -157,12 +188,12 @@ class SQLiteStorage(SessionStorage):
         await self._ensure_initialized()
 
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                cursor = await db.execute(
+            async with self._db_lock:
+                cursor = await self._db.execute(
                     "DELETE FROM sessions WHERE session_id = ?",
                     (session_id,)
                 )
-                await db.commit()
+                await self._db.commit()
                 return cursor.rowcount > 0
         except Exception as e:
             raise StorageError(f"Failed to delete session: {e}")
@@ -172,13 +203,13 @@ class SQLiteStorage(SessionStorage):
         await self._ensure_initialized()
 
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                cursor = await db.execute("""
+            async with self._db_lock:
+                cursor = await self._db.execute("""
                     UPDATE sessions
                     SET last_active_at = ?, message_count = message_count + 1
                     WHERE session_id = ?
                 """, (datetime.now().isoformat(), session_id))
-                await db.commit()
+                await self._db.commit()
                 return cursor.rowcount > 0
         except Exception as e:
             raise StorageError(f"Failed to touch session: {e}")
@@ -188,18 +219,18 @@ class SQLiteStorage(SessionStorage):
         await self._ensure_initialized()
 
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with self._db_lock:
                 if user_id:
                     # Filter by user_id and exclude expired
                     if self.ttl > 0:
                         cutoff = (datetime.now() - timedelta(seconds=self.ttl)).isoformat()
-                        async with db.execute(
+                        async with self._db.execute(
                             "SELECT session_id FROM sessions WHERE user_id = ? AND last_active_at > ?",
                             (user_id, cutoff)
                         ) as cursor:
                             rows = await cursor.fetchall()
                     else:
-                        async with db.execute(
+                        async with self._db.execute(
                             "SELECT session_id FROM sessions WHERE user_id = ?",
                             (user_id,)
                         ) as cursor:
@@ -208,13 +239,13 @@ class SQLiteStorage(SessionStorage):
                     # All sessions (exclude expired)
                     if self.ttl > 0:
                         cutoff = (datetime.now() - timedelta(seconds=self.ttl)).isoformat()
-                        async with db.execute(
+                        async with self._db.execute(
                             "SELECT session_id FROM sessions WHERE last_active_at > ?",
                             (cutoff,)
                         ) as cursor:
                             rows = await cursor.fetchall()
                     else:
-                        async with db.execute("SELECT session_id FROM sessions") as cursor:
+                        async with self._db.execute("SELECT session_id FROM sessions") as cursor:
                             rows = await cursor.fetchall()
 
                 return [row[0] for row in rows]
@@ -235,16 +266,19 @@ class SQLiteStorage(SessionStorage):
 
         try:
             cutoff = (datetime.now() - timedelta(seconds=self.ttl)).isoformat()
-            async with aiosqlite.connect(self.db_path) as db:
-                cursor = await db.execute(
+            async with self._db_lock:
+                cursor = await self._db.execute(
                     "DELETE FROM sessions WHERE last_active_at < ?",
                     (cutoff,)
                 )
-                await db.commit()
+                await self._db.commit()
                 return cursor.rowcount
         except Exception as e:
             raise StorageError(f"Failed to cleanup expired sessions: {e}")
 
     async def close(self) -> None:
-        """Close storage (SQLite connections are per-operation, so this is a no-op)."""
-        pass
+        """Close storage connection."""
+        if self._db:
+            await self._db.close()
+            self._db = None
+            self._initialized = False
