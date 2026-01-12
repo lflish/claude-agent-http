@@ -59,7 +59,7 @@ services:
       # Session Storage Configuration
       # ============================================
       # Storage backend: memory | sqlite | postgresql
-      CLAUDE_AGENT_SESSION_STORAGE: ${CLAUDE_AGENT_SESSION_STORAGE:-sqlite}
+      CLAUDE_AGENT_SESSION_STORAGE: ${CLAUDE_AGENT_SESSION_STORAGE:-memory}
       CLAUDE_AGENT_SESSION_TTL: ${CLAUDE_AGENT_SESSION_TTL:-3600}
 
       # SQLite configuration (used when storage=sqlite)
@@ -75,7 +75,7 @@ services:
       # ============================================
       # API Server Configuration
       # ============================================
-      CLAUDE_AGENT_API_HOST: ${CLAUDE_AGENT_API_HOST:-0.0.0.0}
+      CLAUDE_AGENT_API_HOST: ${CLAUDE_AGENT_API_HOST:-127.0.0.1}
       CLAUDE_AGENT_API_PORT: ${CLAUDE_AGENT_API_PORT:-8000}
 
       # ============================================

@@ -99,12 +99,13 @@ All SDK settings are in `config.yaml`:
 
 ```yaml
 user:
-  base_dir: "/home"        # Base directory for all users
-  auto_create_dir: true    # Auto-create directories
+  base_dir: "~/claude-agent-http/"  # Base directory for all users
+  auto_create_dir: true             # Auto-create directories
 
 session:
-  storage: "sqlite"        # memory | sqlite | postgresql
-  ttl: 3600               # Session TTL in seconds
+  storage: "memory"        # memory | sqlite | postgresql
+  ttl: 3600               # Session TTL in seconds (0 = no expiration)
+  sqlite_path: "sessions.db"       # SQLite database path
   # PostgreSQL settings (when storage: postgresql)
   pg_host: "localhost"
   pg_port: 5432
@@ -112,13 +113,19 @@ session:
   pg_user: "postgres"
   pg_password: "postgres"
 
+api:
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins:
+    - "*"
+
 defaults:
-  system_prompt: "..."
+  system_prompt: "You are a helpful AI assistant."
   permission_mode: "bypassPermissions"
   allowed_tools: [Bash, Read, Write, Edit, Glob, Grep]
   model: null             # null = SDK default
-  max_turns: null
-  max_budget_usd: null
+  max_turns: null         # null = unlimited
+  max_budget_usd: null    # null = unlimited
 
 mcp_servers: {}           # Global MCP servers for all sessions
 plugins: []               # Global plugins for all sessions
