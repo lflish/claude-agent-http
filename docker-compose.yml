@@ -32,9 +32,14 @@ services:
   # Claude Agent HTTP API Service
   # ============================================
   app:
+    # 使用公共镜像（推荐）
+    # image: ccr.ccs.tencentyun.com/claude/claude-agent-http:v1.0.0-20260119
+
+    # 或者本地构建（需要先执行 ./build.sh）
     build:
       context: .
       dockerfile: Dockerfile
+    image: ${DOCKER_IMAGE_NAME:-ccr.ccs.tencentyun.com/claude/claude-agent-http}:${IMAGE_TAG:-v1.0.0-20260119}
     container_name: claude-agent-http
     restart: unless-stopped
 

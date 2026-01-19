@@ -10,6 +10,9 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Release](https://img.shields.io/github/v/release/lflish/claude-agent-http)](https://github.com/lflish/claude-agent-http/releases)
 [![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)](https://www.docker.com/)
+[![Docker Image](https://img.shields.io/badge/docker%20image-ccr.ccs.tencentyun.com-blue)](https://cloud.tencent.com/product/tcr)
+
+📦 **Public Image**: `ccr.ccs.tencentyun.com/claude/claude-agent-http`
 
 [English](README.md) | [简体中文](README_CN.md)
 
@@ -80,9 +83,35 @@ Production-ready Docker setup with automatic permission management
 
 ## 🚀 Quick Start
 
-### Method 1: Docker (Recommended)
+### Method 1: Public Docker Image (Fastest)
 
-The fastest way to get started:
+Pull and run the pre-built image directly from Tencent Cloud Container Registry:
+
+```bash
+# 1. Pull the latest image
+docker pull ccr.ccs.tencentyun.com/claude/claude-agent-http:v1.0.0-20260119
+
+# 2. Run the container
+docker run -d \
+  --name claude-agent-http \
+  --network host \
+  -e ANTHROPIC_API_KEY=sk-ant-xxxxx \
+  -v ~/.claude-agent-http/claude-users:/data/claude-users \
+  -v ~/.claude-agent-http/db:/data/db \
+  --restart unless-stopped \
+  ccr.ccs.tencentyun.com/claude/claude-agent-http:v1.0.0-20260119
+
+# 3. Verify
+curl http://localhost:8000/health
+```
+
+✅ **That's it!** Your API is running at `http://localhost:8000`
+
+> 💡 **Tip**: Images are hosted on Tencent Cloud CCR for fast access in China.
+
+### Method 2: Docker Compose (Recommended for Development)
+
+For a full-featured setup with all configurations:
 
 ```bash
 # 1. Clone the repository
@@ -100,11 +129,9 @@ docker-compose up -d
 curl http://localhost:8000/health
 ```
 
-✅ **That's it!** Your API is running at `http://localhost:8000`
-
 📖 For detailed Docker deployment, see [DOCKER.md](DOCKER.md) | [中文版](DOCKER_CN.md)
 
-### Method 2: Manual Installation
+### Method 3: Manual Installation
 
 For development or custom setups:
 
@@ -124,7 +151,17 @@ uvicorn claude_agent_http.main:app --reload --host 0.0.0.0 --port 8000
 
 ## 🐳 Docker Deployment
 
-We provide three deployment modes:
+### Deployment Comparison
+
+| Method | Use Case | Build Required | Startup Speed | Customization |
+|--------|----------|---------------|---------------|---------------|
+| **Public Image** | Quick start, Production | ❌ No | ⚡ Fastest | ❌ No |
+| **Docker Compose** | Development, Testing | ✅ Yes | Medium | ✅ Full |
+| **Build Script** | Custom deployment | ✅ Yes | Medium | ✅ Full |
+
+### Deployment Modes
+
+We provide three storage modes:
 
 | Mode | Use Case | Command |
 |------|----------|---------|
@@ -144,6 +181,35 @@ docker-compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
 # Check health
 curl http://localhost:8000/health
 ```
+
+### Build Your Own Image (Optional)
+
+If you need to customize the code or build your own image:
+
+```bash
+# 1. Build image (generates versioned tag with timestamp)
+./build.sh
+# Creates tag: ccr.ccs.tencentyun.com/claude/claude-agent-http:v1.0.0-20260119
+
+# 2. Run locally
+./run.sh
+# Or specify version: ./run.sh v1.0.0-20260119
+
+# 3. Push to your registry (optional)
+docker push ccr.ccs.tencentyun.com/claude/claude-agent-http:v1.0.0-20260119
+```
+
+### Version Management
+
+**Image Tag Strategy:**
+- `v{VERSION}-{TIMESTAMP}` - Version + timestamp (e.g., `v1.0.0-20260119`)
+- Each build generates a unique timestamped tag for easy version tracking
+
+**Version Release Process:**
+1. Update `VERSION` file
+2. Run `./build.sh` to build new version
+3. Push to registry: `docker push ccr.ccs.tencentyun.com/claude/claude-agent-http:v{VERSION}-{TIMESTAMP}`
+4. Create git tag: `git tag v1.0.0 && git push --tags`
 
 ### Docker Features
 
