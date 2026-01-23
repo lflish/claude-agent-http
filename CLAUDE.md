@@ -20,7 +20,7 @@ uvicorn claude_agent_http.main:app --host 0.0.0.0 --port 8000 --reload
 
 # Docker deployment - Quick start with helper script
 cp .env.example .env
-# Edit .env and set ANTHROPIC_API_KEY
+# Edit .env and configure API authentication (ANTHROPIC_API_KEY or ANTHROPIC_BASE_URL+TOKEN)
 ./docker-start.sh
 
 # Docker deployment - Manual modes
@@ -132,20 +132,20 @@ plugins: []               # Global plugins for all sessions
 ```
 
 **Environment Variables** (override config.yaml):
-- `ANTHROPIC_API_KEY` (required) - Your Anthropic API key
-- `ANTHROPIC_BASE_URL` - Custom API endpoint (e.g., for proxies)
-- `ANTHROPIC_AUTH_TOKEN` - Alternative to API_KEY for custom endpoints
+
+API Authentication (choose ONE method):
+- Method 1 - Standard: `ANTHROPIC_API_KEY` - Your Anthropic API key
+- Method 2 - Custom: `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` - Custom API endpoint
+
+Core configuration:
+- `CLAUDE_AGENT_USER_BASE_DIR` - Base directory for user files (default: /data/claude-users)
+- `CLAUDE_AGENT_SESSION_STORAGE` - Storage backend: memory|sqlite|postgresql (default: sqlite)
+- `CLAUDE_AGENT_SESSION_SQLITE_PATH` - SQLite database path (default: ~/.claude/sessions.db)
+
+Optional overrides:
 - `ANTHROPIC_MODEL` - Override default model
-- `CLAUDE_AGENT_USER_BASE_DIR` - Override base directory
-- `CLAUDE_AGENT_SESSION_STORAGE` - Override storage backend (memory|sqlite|postgresql)
-- `CLAUDE_AGENT_SESSION_TTL` - Override session TTL (seconds)
-- `CLAUDE_AGENT_SESSION_SQLITE_PATH` - Override SQLite database path
-- `CLAUDE_AGENT_SESSION_PG_HOST` - PostgreSQL host
-- `CLAUDE_AGENT_SESSION_PG_PORT` - PostgreSQL port
-- `CLAUDE_AGENT_SESSION_PG_DATABASE` - PostgreSQL database name
-- `CLAUDE_AGENT_SESSION_PG_USER` - PostgreSQL username
-- `CLAUDE_AGENT_SESSION_PG_PASSWORD` - PostgreSQL password
-- `CLAUDE_AGENT_API_PORT` - Override API port
+- `CLAUDE_AGENT_SESSION_TTL` - Session TTL in seconds (0 = no expiration)
+- `CLAUDE_AGENT_SESSION_PG_*` - PostgreSQL connection settings (host, port, database, user, password)
 
 **Priority**: Environment variables > config.yaml > defaults
 
@@ -191,8 +191,9 @@ All storage backends implement `SessionStorage` interface (storage/base.py):
    - Command: `docker-compose up -d` or `./docker-start.sh`
    - Docker manages permissions automatically
    - Best for: Production, single-instance deployments
-   - Database: `/data/db/sessions.db`
-   - User files: `/data/claude-users/{user_id}/`
+   - Volumes:
+     - `claude-data`: Claude SDK data (`~/.claude/`) - session history, cache
+     - `claude-users`: User working directories (`/data/claude-users/{user_id}/`)
 
 2. **SQLite + Bind Mounts** (development mode)
    - Command: `./docker-start.sh --bind-mounts`
@@ -207,13 +208,16 @@ All storage backends implement `SessionStorage` interface (storage/base.py):
 
 **Helper Script** (`docker-start.sh`):
 - Validates configuration and environment variables
-- Checks ANTHROPIC_API_KEY is set
+- Checks API authentication is configured (supports both standard and custom methods)
 - Auto-creates and fixes permissions for bind mounts
 - Provides clear error messages and suggestions
 - Runs health checks after startup
 
 **Volume Management**:
-- **Named Volumes**: Docker-managed, UID/GID defaults to 1000:1000
+- **Named Volumes** (default):
+  - `claude-data`: Claude SDK data (~/.claude/) - session history, cache, SQLite DB
+  - `claude-users`: User working directories (/data/claude-users/)
+  - Docker-managed, UID/GID defaults to 1000:1000
 - **Bind Mounts**: Host-managed, use `docker-compose.override.yml` (auto-created by script)
 
 **Configuration Priority**:

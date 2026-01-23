@@ -11,8 +11,8 @@ echo -e "${GREEN}Starting Claude Agent HTTP...${NC}"
 
 # Directories that need to be writable
 REQUIRED_DIRS=(
+    "/home/claudeuser/.claude"
     "/data/claude-users"
-    "/data/db"
 )
 
 # If running as root, fix permissions and switch to claudeuser

@@ -35,7 +35,7 @@ ENV HOME=/home/claudeuser
 
 # Create data directories with proper permissions
 # These will be used if volumes are not mounted
-RUN mkdir -p /data/claude-users /data/db && \
+RUN mkdir -p /data/claude-users /home/claudeuser/.claude && \
     chown -R claudeuser:claudeuser /data /app /home/claudeuser
 
 # Note: Do not switch to non-root user here

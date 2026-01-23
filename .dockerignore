@@ -40,7 +40,15 @@ examples/
 # Docker
 Dockerfile
 docker-compose.yml
+docker-compose.*.yml
 .dockerignore
+docker-entrypoint.sh
+# Build and deployment scripts (run on host, not in container)
+build.sh
+run.sh
+docker-start.sh
+VERSION
+postman_collection.json
 
 # Configuration
 .mcp.json

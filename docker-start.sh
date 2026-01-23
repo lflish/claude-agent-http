@@ -97,7 +97,7 @@ Examples:
 
 Configuration:
   Edit .env file to customize settings
-  Required: ANTHROPIC_API_KEY
+  Configure API authentication (ANTHROPIC_API_KEY or ANTHROPIC_BASE_URL+ANTHROPIC_AUTH_TOKEN)
 
 For detailed documentation, see DOCKER.md
 EOF
@@ -173,7 +173,7 @@ if [ ! -f .env ]; then
     if [ -f .env.example ]; then
         cp .env.example .env
         print_success ".env file created"
-        print_warning "Please edit .env and set your ANTHROPIC_API_KEY"
+        print_warning "Please edit .env and configure API authentication"
         exit 1
     else
         print_error ".env.example not found"
@@ -188,15 +188,30 @@ set -a
 source .env
 set +a
 
-# Validate ANTHROPIC_API_KEY
-if [ -z "$ANTHROPIC_API_KEY" ] || [ "$ANTHROPIC_API_KEY" = "your_api_key_here" ]; then
-    print_error "ANTHROPIC_API_KEY is not set or invalid"
-    print_info "Please edit .env and set your Anthropic API key"
-    print_info "Get your API key from: https://console.anthropic.com/"
-    exit 1
+# Validate API authentication configuration
+# Support two methods:
+# 1. Standard: ANTHROPIC_API_KEY
+# 2. Custom endpoint: ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN
+has_standard_auth=false
+has_custom_auth=false
+
+if [ -n "$ANTHROPIC_API_KEY" ] && [ "$ANTHROPIC_API_KEY" != "your_api_key_here" ]; then
+    has_standard_auth=true
+    print_success "Using standard Anthropic API authentication"
 fi
 
-print_success "ANTHROPIC_API_KEY is set"
+if [ -n "$ANTHROPIC_BASE_URL" ] && [ -n "$ANTHROPIC_AUTH_TOKEN" ]; then
+    has_custom_auth=true
+    print_success "Using custom API endpoint: $ANTHROPIC_BASE_URL"
+fi
+
+if [ "$has_standard_auth" = false ] && [ "$has_custom_auth" = false ]; then
+    print_error "No API authentication configured"
+    print_info "Please edit .env and configure ONE of the following:"
+    print_info "  1. Standard: Set ANTHROPIC_API_KEY (from https://console.anthropic.com/)"
+    print_info "  2. Custom: Set ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN"
+    exit 1
+fi
 
 # Validate storage configuration
 STORAGE_TYPE="${CLAUDE_AGENT_SESSION_STORAGE:-sqlite}"

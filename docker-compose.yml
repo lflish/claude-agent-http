@@ -49,60 +49,33 @@ services:
 
     environment:
       # ============================================
-      # System Configuration
+      # Core Configuration
       # ============================================
-      # Set HOME for non-root user to avoid permission issues
       HOME: /home/claudeuser
 
-      # ============================================
-      # User Directory Configuration
-      # ============================================
+      # User working directory
       CLAUDE_AGENT_USER_BASE_DIR: ${CLAUDE_AGENT_USER_BASE_DIR:-/data/claude-users}
-      CLAUDE_AGENT_USER_AUTO_CREATE_DIR: ${CLAUDE_AGENT_USER_AUTO_CREATE_DIR:-true}
+
+      # Session storage: memory | sqlite | postgresql
+      CLAUDE_AGENT_SESSION_STORAGE: ${CLAUDE_AGENT_SESSION_STORAGE:-sqlite}
+      CLAUDE_AGENT_SESSION_SQLITE_PATH: ${CLAUDE_AGENT_SESSION_SQLITE_PATH:-/home/claudeuser/.claude/sessions.db}
 
       # ============================================
-      # Session Storage Configuration
+      # Anthropic API Configuration (Optional)
       # ============================================
-      # Storage backend: memory | sqlite | postgresql
-      CLAUDE_AGENT_SESSION_STORAGE: ${CLAUDE_AGENT_SESSION_STORAGE:-memory}
-      CLAUDE_AGENT_SESSION_TTL: ${CLAUDE_AGENT_SESSION_TTL:-3600}
-
-      # SQLite configuration (used when storage=sqlite)
-      CLAUDE_AGENT_SESSION_SQLITE_PATH: ${CLAUDE_AGENT_SESSION_SQLITE_PATH:-/data/db/sessions.db}
-
-      # PostgreSQL configuration (used when storage=postgresql)
-      CLAUDE_AGENT_SESSION_PG_HOST: ${CLAUDE_AGENT_SESSION_PG_HOST:-postgres}
-      CLAUDE_AGENT_SESSION_PG_PORT: ${CLAUDE_AGENT_SESSION_PG_PORT:-5432}
-      CLAUDE_AGENT_SESSION_PG_DATABASE: ${CLAUDE_AGENT_SESSION_PG_DATABASE:-claude_agent}
-      CLAUDE_AGENT_SESSION_PG_USER: ${CLAUDE_AGENT_SESSION_PG_USER:-postgres}
-      CLAUDE_AGENT_SESSION_PG_PASSWORD: ${CLAUDE_AGENT_SESSION_PG_PASSWORD:-postgres}
-
-      # ============================================
-      # API Server Configuration
-      # ============================================
-      CLAUDE_AGENT_API_HOST: ${CLAUDE_AGENT_API_HOST:-127.0.0.1}
-      CLAUDE_AGENT_API_PORT: ${CLAUDE_AGENT_API_PORT:-8000}
-
-      # ============================================
-      # Anthropic Claude SDK Configuration
-      # ============================================
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN:-}
+      # Set in .env file based on your authentication method:
+      # Standard: ANTHROPIC_API_KEY
+      # Custom endpoint: ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+      ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
-
-      # ============================================
-      # Default Session Settings
-      # ============================================
-      CLAUDE_AGENT_DEFAULTS_MODEL: ${CLAUDE_AGENT_DEFAULTS_MODEL:-}
-      CLAUDE_AGENT_DEFAULTS_MAX_TURNS: ${CLAUDE_AGENT_DEFAULTS_MAX_TURNS:-}
-      CLAUDE_AGENT_DEFAULTS_MAX_BUDGET_USD: ${CLAUDE_AGENT_DEFAULTS_MAX_BUDGET_USD:-}
 
     volumes:
       # Named volumes (default): Docker manages permissions automatically
       # For bind mounts: copy docker-compose.override.bindmounts.yml to docker-compose.override.yml
-      - claude-users:/data/claude-users
-      - claude-db:/data/db
+      - ~/.claude-data:/home/claudeuser/.claude    # Claude SDK data (session history, cache)
+      - ~/claude-users:/data/claude-users          # User working directories
       # Optional: Custom config file
       - ${HOST_CONFIG_FILE:-./config.yaml}:/app/config.yaml:ro
 
@@ -124,9 +97,9 @@ services:
 # ============================================
 # Docker automatically manages permissions for named volumes
 volumes:
-  claude-users:
+  claude-data:
     driver: local
-  claude-db:
+  claude-users:
     driver: local
 
 # ============================================
