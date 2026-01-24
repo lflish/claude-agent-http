@@ -101,6 +101,7 @@ class ClaudeAgent:
         system_prompt = self.config.defaults.system_prompt
         mcp_servers = self.config.mcp_servers
         plugins = self.config.plugins
+        setting_sources = self.config.defaults.setting_sources
         model = self.config.defaults.model
         permission_mode = self.config.defaults.permission_mode
         allowed_tools = self.config.defaults.allowed_tools
@@ -113,6 +114,7 @@ class ClaudeAgent:
             system_prompt=system_prompt,
             mcp_servers=mcp_servers,
             plugins=plugins,
+            setting_sources=setting_sources,
             model=model,
             permission_mode=permission_mode,
             allowed_tools=allowed_tools,
@@ -144,6 +146,7 @@ class ClaudeAgent:
                 system_prompt=system_prompt,
                 mcp_servers=mcp_servers,
                 plugins=plugins,
+                setting_sources=setting_sources,
                 model=model,
                 permission_mode=permission_mode,
                 allowed_tools=allowed_tools,
@@ -201,6 +204,7 @@ class ClaudeAgent:
             system_prompt=session_info.system_prompt,
             mcp_servers=session_info.mcp_servers,
             plugins=session_info.plugins,
+            setting_sources=session_info.setting_sources,
             model=session_info.model,
             permission_mode=session_info.permission_mode,
             allowed_tools=session_info.allowed_tools,
@@ -418,6 +422,7 @@ class ClaudeAgent:
         system_prompt: Optional[str],
         mcp_servers: Dict,
         plugins: List[Dict],
+        setting_sources: List[str],
         model: Optional[str],
         permission_mode: str,
         allowed_tools: List[str],
@@ -440,6 +445,9 @@ class ClaudeAgent:
 
         if plugins:
             options_dict['plugins'] = plugins
+
+        if setting_sources:
+            options_dict['setting_sources'] = setting_sources
 
         if model:
             options_dict['model'] = model

@@ -35,18 +35,49 @@ defaults:
     - "Edit"
     - "Glob"
     - "Grep"
+    - "Skill"
+  setting_sources:               # Load Skills from filesystem
+    - "user"                     # ~/.claude/skills/ (personal skills)
+    - "project"                  # .claude/skills/ (project skills)
   model: null                    # Model to use (null = SDK default)
   max_turns: null                # Max conversation turns (null = unlimited)
   max_budget_usd: null           # Max budget in USD (null = unlimited)
 
 # Global MCP servers (applied to all sessions)
-mcp_servers: {}
-  # filesystem:
-  #   type: "stdio"
-  #   command: "npx"
-  #   args: ["-y", "@anthropic/mcp-server-filesystem"]
+mcp_servers:
+  # Playwright MCP server - Browser automation
+  playwright:
+    type: "stdio"
+    command: "npx"
+    args:
+      - "@playwright/mcp@latest"
 
-# Global plugins (applied to all sessions)
+  # Filesystem MCP server - File system access (user scope)
+  filesystem:
+    type: "stdio"
+    command: "npx"
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "/data/claude-users"
+
+  # Remote Exec MCP server - SSE type
+  remote_exec:
+    type: "sse"
+    url: "http://10.1.16.4:8000/mcp/sse"
+
+# Global plugins (SDK-level plugins, different from Skills)
+# For Skills, use setting_sources in defaults section above
 plugins: []
-  # - type: "local"
-  #   path: "/path/to/plugin"
+
+  # Example configurations (uncomment to use):
+  # System-level skills (from Claude data directory)
+
+  # Project-level skills (from repository)
+  #- type: "local"
+  #  path: "/app/skills"
+
+  # Note: Skills directories will be scanned for all available skills
+  # Each skill should follow the Claude Agent SDK plugin structure
+  # System skills are loaded from the mounted ~/.claude-data volume
+  # Project skills are included in the Docker image

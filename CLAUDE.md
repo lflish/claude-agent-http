@@ -122,13 +122,14 @@ api:
 defaults:
   system_prompt: "You are a helpful AI assistant."
   permission_mode: "bypassPermissions"
-  allowed_tools: [Bash, Read, Write, Edit, Glob, Grep]
+  allowed_tools: [Bash, Read, Write, Edit, Glob, Grep, Skill]  # Include "Skill" to enable Skills
+  setting_sources: [user, project]  # CRITICAL: Required to load Skills from filesystem
   model: null             # null = SDK default
   max_turns: null         # null = unlimited
   max_budget_usd: null    # null = unlimited
 
 mcp_servers: {}           # Global MCP servers for all sessions
-plugins: []               # Global plugins for all sessions
+plugins: []               # SDK-level plugins (NOT the same as Skills)
 ```
 
 **Environment Variables** (override config.yaml):
@@ -182,6 +183,49 @@ All storage backends implement `SessionStorage` interface (storage/base.py):
 3. `security.ensure_directory()` creates if needed (when `auto_create_dir=true`)
 4. Path passed to ClaudeSDKClient as `cwd` option
 
+### Skills Configuration (CRITICAL)
+
+**Skills vs Plugins** - Two different concepts:
+- **Skills**: SKILL.md files in `~/.claude/skills/` or `.claude/skills/` - loaded via `setting_sources`
+- **Plugins**: SDK-level JavaScript/TypeScript modules - configured via `plugins` array
+
+**To enable Skills, you MUST configure both**:
+
+1. **Add `setting_sources` to defaults** (in config.py and config.yaml):
+   ```python
+   setting_sources: List[str] = Field(default_factory=lambda: ["user", "project"])
+   ```
+   - `"user"`: Loads from `~/.claude/skills/` (container: `/home/claudeuser/.claude/skills/`)
+   - `"project"`: Loads from `.claude/skills/` relative to session cwd
+
+2. **Add "Skill" to allowed_tools**:
+   ```yaml
+   allowed_tools: ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill"]
+   ```
+
+3. **Pass `setting_sources` to SDK** (in agent.py):
+   ```python
+   setting_sources = self.config.defaults.setting_sources
+   options = self._build_options(..., setting_sources=setting_sources)
+   options_dict['setting_sources'] = setting_sources
+   ```
+
+**Without `setting_sources`**: Skills will NOT be loaded from filesystem, even if files exist and `plugins` is configured.
+
+**Skills Directory Structure**:
+```
+/home/claudeuser/.claude/skills/
+├── skill-name/
+│   └── SKILL.md          # Required: frontmatter + instructions
+└── another-skill/
+    └── SKILL.md
+```
+
+**Docker Volume Mapping**:
+- Host: `~/claude-users/lark/.claude/skills/`
+- Container: `/home/claudeuser/.claude/skills/`
+- Configured in docker-compose.yml volume: `claude-data`
+
 ### Docker Deployment Architecture
 
 **Unified Configuration**: Single `docker-compose.yml` file supports multiple deployment modes through environment variables and profiles.
@@ -225,9 +269,53 @@ All storage backends implement `SessionStorage` interface (storage/base.py):
 2. docker-compose.yml defaults
 3. config.yaml defaults - lowest priority
 
+## Code Modification Workflow
+
+When making changes to Python code:
+
+1. **Modify source files** in `claude_agent_http/`
+2. **Rebuild Docker image**: `docker-compose build` (or `docker-compose build --no-cache` for clean build)
+3. **Restart services**: `docker-compose down && docker-compose up -d`
+4. **Verify changes**:
+   ```bash
+   # Check config loaded correctly
+   docker exec claude-agent-http python3 -c "from claude_agent_http.config import get_config; print(get_config().defaults.setting_sources)"
+
+   # Test API
+   curl -X POST http://localhost:8000/api/v1/sessions -H "Content-Type: application/json" -d '{"user_id": "test"}'
+   ```
+
+**Note**: Changes to `config.yaml` do NOT require rebuild, only restart.
+
+## Common Issues
+
+### Skills Not Loading
+**Symptom**: Claude reports "no skills available"
+
+**Solution**: Verify all three requirements:
+1. `setting_sources: ["user", "project"]` in config (not just `plugins`)
+2. `"Skill"` in `allowed_tools`
+3. Skills exist in `/home/claudeuser/.claude/skills/` with valid SKILL.md files
+
+**Debug**:
+```bash
+docker exec claude-agent-http ls -la /home/claudeuser/.claude/skills/
+docker exec claude-agent-http python3 -c "from claude_agent_http.config import get_config; print(get_config().defaults.setting_sources)"
+```
+
+### Docker Build Errors
+If you get `KeyError: 'ContainerConfig'`:
+```bash
+docker-compose down
+docker-compose build
+docker-compose up -d
+```
+
 ## Documentation References
 
 - Full API examples: `docs/API_EXAMPLES.md`
 - Docker deployment: `DOCKER.md` (English), `DOCKER_CN.md` (中文)
+- MCP servers and skills: `MCP_AND_SKILLS.md`
+- Skills investigation: `SKILLS_INVESTIGATION_FINAL.md` (troubleshooting reference)
 - Postman collection: `postman_collection.json`
 - User README: `README.md` (English), `README_CN.md` (中文)

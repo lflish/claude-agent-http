@@ -40,7 +40,10 @@ class DefaultsConfig(BaseModel):
     system_prompt: str = "You are a helpful AI assistant."
     permission_mode: str = "bypassPermissions"
     allowed_tools: List[str] = Field(
-        default_factory=lambda: ["Bash", "Read", "Write", "Edit", "Glob", "Grep"]
+        default_factory=lambda: ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill"]
+    )
+    setting_sources: List[str] = Field(
+        default_factory=lambda: ["user", "project"]
     )
     model: Optional[str] = None
     max_turns: Optional[int] = None

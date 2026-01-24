@@ -295,16 +295,37 @@ session:
 defaults:
   system_prompt: "You are a helpful AI assistant."
   permission_mode: "bypassPermissions"
-  allowed_tools: [Bash, Read, Write, Edit, Glob, Grep]
+  allowed_tools: [Bash, Read, Write, Edit, Glob, Grep, Skill]  # Include "Skill" for Skills support
+  setting_sources: [user, project]  # REQUIRED for Skills: loads from ~/.claude/skills/ and .claude/skills/
   model: null                # null = SDK default
   max_turns: null            # null = unlimited
   max_budget_usd: null       # null = unlimited
 
-mcp_servers: {}              # Global MCP servers
-plugins: []                  # Global plugins
+mcp_servers: {}              # Global MCP servers for all sessions
+plugins: []                  # SDK-level plugins (NOT Skills)
 ```
 
 **Priority**: Environment Variables > config.yaml > Defaults
+
+### Skills Support
+
+This service supports [Claude Agent Skills](https://platform.claude.com/docs/en/agent-sdk/skills) - specialized capabilities that Claude automatically invokes when relevant.
+
+**Key Configuration Requirements**:
+1. Add `"Skill"` to `allowed_tools`
+2. Set `setting_sources: ["user", "project"]` - **CRITICAL**: Without this, Skills won't load from filesystem
+3. Place Skills in `~/.claude/skills/` (user-level) or `.claude/skills/` (project-level)
+
+**Skills Directory Structure**:
+```
+~/.claude/skills/
+├── my-skill/
+│   └── SKILL.md          # Required: YAML frontmatter + instructions
+└── another-skill/
+    └── SKILL.md
+```
+
+For detailed Skills configuration, see [MCP_AND_SKILLS.md](MCP_AND_SKILLS.md) or [CLAUDE.md](CLAUDE.md).
 
 ## 🏗️ Architecture
 

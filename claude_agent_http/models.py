@@ -20,6 +20,7 @@ class SessionInfo(BaseModel):
     system_prompt: Optional[str] = None
     mcp_servers: Dict[str, Any] = Field(default_factory=dict)
     plugins: List[Dict] = Field(default_factory=list)
+    setting_sources: List[str] = Field(default_factory=lambda: ["user", "project"])
     model: Optional[str] = None
     permission_mode: str = "bypassPermissions"
     allowed_tools: List[str] = Field(default_factory=list)
