@@ -42,13 +42,13 @@ Dockerfile
 docker-compose.yml
 docker-compose.*.yml
 .dockerignore
-docker-entrypoint.sh
 # Build and deployment scripts (run on host, not in container)
 build.sh
 run.sh
 docker-start.sh
 VERSION
 postman_collection.json
+# Note: docker-entrypoint.sh is needed in container, so NOT excluded here
 
 # Configuration
 .mcp.json
