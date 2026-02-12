@@ -39,7 +39,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${DOCKER_IMAGE_NAME:-ccr.ccs.tencentyun.com/claude/claude-agent-http}:${IMAGE_TAG:-v1.0.0-20260119}
+    image: ${DOCKER_IMAGE_NAME:-ccr.ccs.tencentyun.com/claude/claude-agent-http}:${IMAGE_TAG:-v1.0.3}
     container_name: claude-agent-http
     restart: unless-stopped
 
