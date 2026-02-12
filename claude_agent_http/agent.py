@@ -3,6 +3,7 @@ Core Claude Agent class for managing sessions and sending messages.
 """
 import asyncio
 import os
+import re
 import time
 from typing import Optional, Dict, Any, List, AsyncIterator
 
@@ -229,6 +230,14 @@ class ClaudeAgent:
 
         # Load session info from storage
         session_info = await self.storage.get(session_id)
+
+        # Fallback: recover from JSONL files when storage has no record
+        # (e.g. after container restart with memory storage, or after TTL expiry)
+        if not session_info:
+            session_info = self._recover_session_from_jsonl(session_id)
+            if session_info:
+                await self.storage.save(session_id, session_info)
+
         if not session_info:
             raise SessionNotFoundError(f"Session {session_id} not found or expired")
 
@@ -515,6 +524,114 @@ class ClaudeAgent:
         current_mb = self._get_process_memory_mb()
         return current_mb < limit_mb
 
+    # ============ Session Recovery ============
+
+    def _recover_session_from_jsonl(self, session_id: str) -> Optional[SessionInfo]:
+        """
+        Try to recover session info from JSONL files on disk.
+
+        Used as fallback when storage has no record (e.g., memory storage
+        after container restart, or after session TTL expiry).
+
+        Claude CLI stores sessions at:
+            ~/.claude/projects/{encoded_cwd}/{session_id}.jsonl
+        where encoded_cwd is the absolute cwd path with '/' replaced by '-'.
+        """
+        projects_dir = os.path.join(os.path.expanduser('~'), '.claude', 'projects')
+
+        if not os.path.isdir(projects_dir):
+            return None
+
+        # Find which project directory contains this session's JSONL file
+        jsonl_filename = f"{session_id}.jsonl"
+        found_dir_name = None
+
+        try:
+            for dir_name in os.listdir(projects_dir):
+                jsonl_path = os.path.join(projects_dir, dir_name, jsonl_filename)
+                if os.path.isfile(jsonl_path):
+                    found_dir_name = dir_name
+                    break
+        except OSError:
+            return None
+
+        if not found_dir_name:
+            return None
+
+        # Decode: directory name is the cwd with '/' replaced by '-'
+        # e.g., '-data-claude-users-22user' represents '/data/claude-users/22user'
+        # Since this encoding is lossy (can't distinguish '-' in names from '/'),
+        # we match against actual user directories under base_dir.
+        base_dir = os.path.normpath(os.path.expanduser(self.config.user.base_dir))
+        encoded_base = base_dir.replace('/', '-')
+
+        if not found_dir_name.startswith(encoded_base):
+            return None
+
+        # Try to match against existing user directories
+        user_id = None
+        subdir = None
+        cwd = None
+
+        if os.path.isdir(base_dir):
+            try:
+                for entry in sorted(os.listdir(base_dir)):
+                    entry_path = os.path.join(base_dir, entry)
+                    if not os.path.isdir(entry_path):
+                        continue
+
+                    candidate_cwd = os.path.normpath(entry_path)
+                    candidate_encoded = candidate_cwd.replace('/', '-')
+
+                    if found_dir_name == candidate_encoded:
+                        # Exact match: cwd = base_dir/user_id (no subdir)
+                        user_id = entry
+                        cwd = candidate_cwd
+                        break
+                    elif found_dir_name.startswith(candidate_encoded + '-'):
+                        # Prefix match: session has a subdir
+                        user_id = entry
+                        subdir_encoded = found_dir_name[len(candidate_encoded) + 1:]
+                        # Best-effort subdir decode (ambiguous with hyphens)
+                        subdir = subdir_encoded
+                        cwd = os.path.normpath(os.path.join(base_dir, user_id, subdir))
+                        break
+            except OSError:
+                pass
+
+        # Fallback: extract user_id directly from remaining portion
+        if not user_id:
+            remaining = found_dir_name[len(encoded_base):]
+            if remaining.startswith('-'):
+                remaining = remaining[1:]
+            if remaining and re.match(r'^[a-zA-Z0-9_-]+$', remaining):
+                user_id = remaining
+                cwd = os.path.normpath(os.path.join(base_dir, user_id))
+
+        if not user_id or not cwd:
+            return None
+
+        print(f"[recovery] Recovered session {session_id} for user '{user_id}' from JSONL (cwd: {cwd})")
+
+        return SessionInfo(
+            session_id=session_id,
+            user_id=user_id,
+            subdir=subdir,
+            cwd=cwd,
+            system_prompt=self.config.defaults.system_prompt,
+            mcp_servers=self.config.mcp_servers,
+            plugins=self.config.plugins,
+            setting_sources=self.config.defaults.setting_sources,
+            model=self.config.defaults.model,
+            permission_mode=self.config.defaults.permission_mode,
+            allowed_tools=self.config.defaults.allowed_tools,
+            disallowed_tools=[],
+            add_dirs=[],
+            max_turns=self.config.defaults.max_turns,
+            max_budget_usd=self.config.defaults.max_budget_usd,
+            metadata={"recovered_from_jsonl": True},
+        )
+
     # ============ Private Methods ============
 
     async def _get_session_lock(self, session_id: str) -> asyncio.Lock:
@@ -620,14 +737,19 @@ class ClaudeAgent:
                 async with self._clients_lock:
                     for sid in list(self._clients.keys()):
                         info = await self.storage.get(sid)
-                        if info is None:  # Already expired in storage
-                            expired.append(sid)
+                        if info is None:
+                            # Storage has no record - try JSONL recovery before expiring
+                            recovered = self._recover_session_from_jsonl(sid)
+                            if recovered:
+                                await self.storage.save(sid, recovered)
+                            else:
+                                expired.append(sid)
                         elif idle_timeout > 0:
                             last_active = self._last_activity.get(sid, 0)
                             if now - last_active > idle_timeout:
                                 idle.append(sid)
 
-                # Close expired sessions
+                # Close truly expired sessions (no JSONL record either)
                 for sid in expired:
                     await self.close_session(sid)
 
