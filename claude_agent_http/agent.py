@@ -575,6 +575,12 @@ class ClaudeAgent:
         if resume:
             options_dict['resume'] = resume
 
+        # Use npm-installed claude CLI instead of bundled Bun binary
+        # (Bun crashes on CPUs without AVX support)
+        cli_path = self.config.defaults.cli_path
+        if cli_path:
+            options_dict['cli_path'] = cli_path
+
         return ClaudeAgentOptions(**options_dict)
 
     async def _extract_session_id(self, client: ClaudeSDKClient) -> Optional[str]:

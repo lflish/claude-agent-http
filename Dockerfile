@@ -14,8 +14,9 @@ RUN apt-get update && \
         npm \
     && rm -rf /var/lib/apt/lists/*
 
-# Pre-install MCP packages globally to avoid npm exec overhead
-RUN npm install -g @playwright/mcp@latest @modelcontextprotocol/server-filesystem && \
+# Pre-install MCP packages and Claude Code CLI globally
+# Claude Code via npm uses Node.js runtime (the SDK-bundled Bun binary crashes on CPUs without AVX)
+RUN npm install -g @anthropic-ai/claude-code @playwright/mcp@latest @modelcontextprotocol/server-filesystem && \
     npm cache clean --force
 
 # Copy requirements first for better caching

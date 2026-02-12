@@ -50,6 +50,7 @@ class DefaultsConfig(BaseModel):
     setting_sources: List[str] = Field(
         default_factory=lambda: ["user", "project"]
     )
+    cli_path: Optional[str] = None          # Path to claude CLI binary (None = SDK bundled)
     model: Optional[str] = None
     max_turns: Optional[int] = None
     max_budget_usd: Optional[float] = None
@@ -139,6 +140,9 @@ def load_config(config_path: str = "config.yaml") -> Config:
 
     if os.getenv("CLAUDE_AGENT_IDLE_SESSION_TIMEOUT"):
         config.api.idle_session_timeout = int(os.getenv("CLAUDE_AGENT_IDLE_SESSION_TIMEOUT"))
+
+    if os.getenv("CLAUDE_AGENT_CLI_PATH"):
+        config.defaults.cli_path = os.getenv("CLAUDE_AGENT_CLI_PATH")
 
     return config
 

@@ -44,6 +44,7 @@ defaults:
   setting_sources:               # Load Skills from filesystem
     - "user"                     # ~/.claude/skills/ (personal skills)
     - "project"                  # .claude/skills/ (project skills)
+  cli_path: "/usr/local/bin/claude"  # Use npm-installed claude (Bun bundled crashes without AVX)
   model: null                    # Model to use (null = SDK default)
   max_turns: 50                  # Max conversation turns (lower = less memory per session)
   max_budget_usd: null           # Max budget in USD (null = unlimited)
