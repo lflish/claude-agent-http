@@ -89,7 +89,7 @@ Pull and run the pre-built image directly from Tencent Cloud Container Registry:
 
 ```bash
 # 1. Pull the latest image
-docker pull ccr.ccs.tencentyun.com/claude/claude-agent-http:v1.0.0-20260119
+docker pull ccr.ccs.tencentyun.com/claude/claude-agent-http:v1.1.0
 
 # 2. Run the container
 docker run -d \
@@ -99,7 +99,7 @@ docker run -d \
   -v ~/.claude-agent-http/claude-users:/data/claude-users \
   -v ~/.claude-agent-http/db:/data/db \
   --restart unless-stopped \
-  ccr.ccs.tencentyun.com/claude/claude-agent-http:v1.0.0-20260119
+  ccr.ccs.tencentyun.com/claude/claude-agent-http:v1.1.0
 
 # 3. Verify
 curl http://localhost:8000/health
@@ -189,14 +189,14 @@ If you need to customize the code or build your own image:
 ```bash
 # 1. Build image (generates versioned tag with timestamp)
 ./build.sh
-# Creates tag: ccr.ccs.tencentyun.com/claude/claude-agent-http:v1.0.0-20260119
+# Creates tag: ccr.ccs.tencentyun.com/claude/claude-agent-http:v1.1.0
 
 # 2. Run locally
 ./run.sh
 # Or specify version: ./run.sh v1.0.0-20260119
 
 # 3. Push to your registry (optional)
-docker push ccr.ccs.tencentyun.com/claude/claude-agent-http:v1.0.0-20260119
+docker push ccr.ccs.tencentyun.com/claude/claude-agent-http:v1.1.0
 ```
 
 ### Version Management
@@ -363,8 +363,9 @@ For detailed Skills configuration, see [MCP_AND_SKILLS.md](MCP_AND_SKILLS.md) or
 │    └──────────┘      └─────────────────┘      └──────────┘│
 │                                                             │
 │                         ┌──────────────┐                   │
-│                         │ Claude Agent │                   │
-│                         │     SDK      │                   │
+│                         ┌──────────────┐                   │
+│                         │ Claude Code  │                   │
+│                         │ CLI (Node.js)│                   │
 │                         └──────────────┘                   │
 └─────────────────────────────────────────────────────────────┘
                                  │
@@ -406,6 +407,15 @@ Each session spawns a separate Claude CLI subprocess (~300MB each). Without limi
 
 > **Important**: Docker's `deploy.resources.limits` only works in Swarm mode. Use `mem_limit` instead for `docker-compose up`.
 
+## ⚠️ Known Issues / Compatibility
+
+| Issue | Affected | Solution |
+|-------|----------|----------|
+| **Bun segfault on non-AVX CPUs** | KVM VMs, older CPUs without AVX | Fixed in v1.1.0: switched to Node.js runtime via `npm install -g @anthropic-ai/claude-code` |
+| **OOM with multiple sessions** | Hosts with limited RAM | Use `mem_limit` + `memory_limit_mb` (see Memory Protection) |
+
+> **Note**: Since v1.1.0, Claude Code CLI runs on Node.js instead of the SDK-bundled Bun binary, ensuring compatibility with all x86_64 CPUs regardless of AVX support.
+
 ## 🔒 Security Features
 
 - **Path Validation**: Prevents path traversal attacks (`..` blocked)
@@ -438,7 +448,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- Built with [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk)
+- Built with [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk) (Python API) + [Claude Code CLI](https://www.npmjs.com/package/@anthropic-ai/claude-code) (Node.js runtime)
 - Powered by [Anthropic Claude API](https://www.anthropic.com/)
 - Web framework: [FastAPI](https://fastapi.tiangolo.com/)
 

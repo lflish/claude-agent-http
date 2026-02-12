@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-02-12
+
+### Fixed
+- **Critical: Bun runtime segfault on non-AVX CPUs** (e.g., KVM virtual machines)
+  - Root cause: Claude Agent SDK's bundled Bun binary (`v1.3.9-canary.51`) requires AVX instructions
+  - Solution: Switched to `npm install -g @anthropic-ai/claude-code` which uses Node.js runtime
+  - This is a runtime architecture change (Bun → Node.js), hence the minor version bump
+- **Critical: SQLite storage performance issues causing high CPU and I/O usage**
+  - Implemented persistent database connection (eliminated reconnection overhead)
+  - Enabled WAL (Write-Ahead Logging) mode for better concurrency
+  - Reduced synchronous level to NORMAL (still safe, significantly faster)
+  - Increased cache size from 8MB to 40MB
+  - Configured memory-based temporary storage
+  - Added proper connection locking for thread-safety
+  - Performance improvement: 10-100x faster (Touch operations: 6,385 ops/sec)
+  - Touch operations are critical as they occur on every message
+
+### Added
+- **JSONL-based session recovery after container restart**
+  - Automatically detects and recovers sessions from Claude CLI JSONL history files
+  - Enables seamless session continuity across container restarts without data loss
+- Container log rotation configuration (`json-file` driver, 50MB max-size, 3 files)
+- Comprehensive performance optimization documentation (SQLITE_OPTIMIZATION.md)
+- Performance test script (test_sqlite_perf.py) for validation
+
 ## [1.0.3] - 2026-02-12
 
 ### Fixed
@@ -28,27 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Periodic cleanup interval reduced from 120s to 60s for faster response to memory pressure
 - Default `max_turns` set to 50 (was 200) to bound per-session memory growth
 - Default `max_sessions` tuned to 20 with `max_concurrent_requests: 5`
-
-## [Unreleased]
-
-### Fixed
-- **Critical: SQLite storage performance issues causing high CPU and I/O usage**
-  - Implemented persistent database connection (eliminated reconnection overhead)
-  - Enabled WAL (Write-Ahead Logging) mode for better concurrency
-  - Reduced synchronous level to NORMAL (still safe, significantly faster)
-  - Increased cache size from 8MB to 40MB
-  - Configured memory-based temporary storage
-  - Added proper connection locking for thread-safety
-  - Performance improvement: 10-100x faster (Touch operations: 6,385 ops/sec)
-  - Touch operations are critical as they occur on every message
-
-### Added
-- Comprehensive performance optimization documentation (SQLITE_OPTIMIZATION.md)
-  - Detailed explanation of performance issues and solutions
-  - Performance benchmarks and testing methodology
-  - Troubleshooting guide for SQLite-related issues
-  - Migration and monitoring recommendations
-- Performance test script (test_sqlite_perf.py) for validation
 
 ## [1.0.1] - 2026-01-08
 
@@ -106,7 +110,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker deployment support
 - API documentation and Postman collection
 
-[Unreleased]: https://github.com/lflish/claude-agent-http/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/lflish/claude-agent-http/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/lflish/claude-agent-http/compare/v1.0.3...v1.1.0
 [1.0.3]: https://github.com/lflish/claude-agent-http/compare/v1.0.1...v1.0.3
 [1.0.1]: https://github.com/lflish/claude-agent-http/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/lflish/claude-agent-http/releases/tag/v1.0.0
