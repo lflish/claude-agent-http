@@ -33,6 +33,11 @@ class ApiConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
     cors_origins: List[str] = Field(default_factory=lambda: ["*"])
+    max_sessions: int = 20                  # Maximum total sessions
+    max_sessions_per_user: int = 5          # Maximum sessions per user
+    max_concurrent_requests: int = 5        # Maximum concurrent processing requests
+    memory_limit_mb: int = 7168             # Memory threshold in MB, refuse new sessions above this
+    idle_session_timeout: int = 300         # Close idle in-memory clients after N seconds
 
 
 class DefaultsConfig(BaseModel):
@@ -121,6 +126,19 @@ def load_config(config_path: str = "config.yaml") -> Config:
 
     if os.getenv("CLAUDE_AGENT_API_PORT"):
         config.api.port = int(os.getenv("CLAUDE_AGENT_API_PORT"))
+
+    if os.getenv("CLAUDE_AGENT_MAX_SESSIONS"):
+        config.api.max_sessions = int(os.getenv("CLAUDE_AGENT_MAX_SESSIONS"))
+    if os.getenv("CLAUDE_AGENT_MAX_SESSIONS_PER_USER"):
+        config.api.max_sessions_per_user = int(os.getenv("CLAUDE_AGENT_MAX_SESSIONS_PER_USER"))
+    if os.getenv("CLAUDE_AGENT_MAX_CONCURRENT"):
+        config.api.max_concurrent_requests = int(os.getenv("CLAUDE_AGENT_MAX_CONCURRENT"))
+
+    if os.getenv("CLAUDE_AGENT_MEMORY_LIMIT_MB"):
+        config.api.memory_limit_mb = int(os.getenv("CLAUDE_AGENT_MEMORY_LIMIT_MB"))
+
+    if os.getenv("CLAUDE_AGENT_IDLE_SESSION_TIMEOUT"):
+        config.api.idle_session_timeout = int(os.getenv("CLAUDE_AGENT_IDLE_SESSION_TIMEOUT"))
 
     return config
 

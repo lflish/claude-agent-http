@@ -105,10 +105,18 @@ async def health_check():
         agent = get_agent_instance()
         sessions = await agent.list_sessions()
 
+        # Memory usage (including child processes)
+        try:
+            mem_mb = agent._get_process_memory_mb()
+        except Exception:
+            mem_mb = 0
+
         return HealthResponse(
             status="healthy",
             version="1.0.0",
             active_sessions=len(sessions),
+            in_memory_clients=len(agent._clients),
+            memory_mb=round(mem_mb, 1),
             storage_type=agent.config.session.storage,
             uptime_seconds=time.time() - _start_time,
         )

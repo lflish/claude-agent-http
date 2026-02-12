@@ -311,6 +311,106 @@ docker-compose build
 docker-compose up -d
 ```
 
+## Planned Features (Not Yet Implemented)
+
+### Feature 1: Chat History Management
+
+**Problem**: Claude SDK stores conversation history in JSONL files (`~/.claude/projects/<session_id>/<session_id>.jsonl`), but there's no API to query, search, or export chat history.
+
+**Planned Components**:
+- `claude_agent_http/chat_history.py` - `ChatHistoryManager` class for JSONL parsing
+- `claude_agent_http/routers/messages.py` - Message management routes
+
+**Planned API Endpoints**:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/sessions/{id}/messages` | Query chat history (pagination, search, role/time filter) |
+| GET | `/api/v1/sessions/{id}/messages/{msg_id}` | Get single message detail |
+| POST | `/api/v1/sessions/{id}/export` | Export history (JSON/Markdown/Text) |
+
+**New Models**: `Message`, `MessageListResponse`
+
+**Priority**: P0 - basic history query with pagination; P1 - search, export, time range filter; P2 - message delete/edit
+
+### Feature 2: Session State Management Enhancement
+
+**Problem**: Current `SessionInfo` only stores basic metadata. No usage stats, tags, cost tracking, or real-time status.
+
+**Planned Changes**:
+- Extend `SessionInfo` with `status` (idle/processing/error), `tags`, `category` fields
+- New `SessionStats` model: token counts, cost estimates, tool call counts, skills usage, avg response time
+- Update `agent.py` to collect stats during message send
+- Database migration for new fields (stats JSON, tags JSON, category, status)
+
+**Planned API Endpoints**:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/sessions/{id}/stats` | Get session statistics |
+| PATCH | `/api/v1/sessions/{id}/tags` | Update session tags |
+| PATCH | `/api/v1/sessions/{id}/category` | Update session category |
+| GET | `/api/v1/sessions/stats/summary` | Aggregate stats (filter by user/date) |
+
+**Priority**: P0 - basic stats and tags; P1 - aggregation, skills usage stats, cost estimation; P2 - real-time status (WebSocket), performance metrics
+
+### Feature 3: Skills Management
+
+**Problem**: Skills are loaded from filesystem by Claude SDK, but there's no API to list, inspect, or track Skills usage.
+
+**Planned Components**:
+- `claude_agent_http/skills_manager.py` - `SkillsManager` class for scanning/parsing SKILL.md files
+- `claude_agent_http/routers/skills.py` - Skills management routes
+
+**Planned API Endpoints**:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/skills` | List all available Skills (filter by source) |
+| GET | `/api/v1/skills/{name}` | Get Skill detail (content, metadata, usage) |
+| GET | `/api/v1/skills/{name}/stats` | Get Skill usage statistics |
+| POST | `/api/v1/skills/reload` | Reload Skills from filesystem |
+
+**Optional P2 APIs**: `POST /api/v1/skills` (create), `PUT /api/v1/skills/{name}` (update), `DELETE /api/v1/skills/{name}` (delete), `PATCH /api/v1/skills/{name}/enabled` (toggle)
+
+**New Models**: `SkillInfo`, `SkillStats`
+
+**Priority**: P0 - list and detail; P1 - usage stats, reload; P2 - CRUD, enable/disable
+
+### Implementation Order
+
+1. **Phase 1**: Chat History Management (highest user impact)
+2. **Phase 2**: Session State Enhancement (operational visibility)
+3. **Phase 3**: Skills Management (developer tooling)
+
+### Database Changes Required
+
+```sql
+-- Session table extensions
+ALTER TABLE sessions ADD COLUMN stats JSON;
+ALTER TABLE sessions ADD COLUMN tags JSON;
+ALTER TABLE sessions ADD COLUMN category VARCHAR(50);
+ALTER TABLE sessions ADD COLUMN status VARCHAR(20) DEFAULT 'idle';
+
+-- Optional: Skills usage tracking table
+CREATE TABLE skill_usage (
+    id SERIAL PRIMARY KEY,
+    skill_name VARCHAR(100),
+    session_id VARCHAR(200),
+    user_id VARCHAR(64),
+    used_at TIMESTAMP
+);
+```
+
+### Optional Config Extension
+
+```yaml
+features:
+  chat_history: true          # Enable chat history APIs
+  session_stats: true         # Enable session statistics
+  skills_management: true     # Enable Skills management APIs
+```
+
 ## Documentation References
 
 - Full API examples: `docs/API_EXAMPLES.md`

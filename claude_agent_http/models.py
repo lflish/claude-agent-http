@@ -138,6 +138,8 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     active_sessions: int
+    in_memory_clients: int = 0
+    memory_mb: float = 0
     storage_type: str
     uptime_seconds: Optional[float] = None
 

@@ -14,6 +14,10 @@ RUN apt-get update && \
         npm \
     && rm -rf /var/lib/apt/lists/*
 
+# Pre-install MCP packages globally to avoid npm exec overhead
+RUN npm install -g @playwright/mcp@latest @modelcontextprotocol/server-filesystem && \
+    npm cache clean --force
+
 # Copy requirements first for better caching
 COPY requirements.txt .
 

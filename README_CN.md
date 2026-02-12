@@ -152,6 +152,7 @@ curl http://localhost:8000/health
 - ✅ 内置健康检查
 - ✅ 支持命名卷或绑定挂载
 - ✅ PostgreSQL 支持多实例部署
+- ✅ 容器内存限制（OOM 防护）
 
 **故障排查**: 遇到问题？查看我们的[全面故障排查指南](DOCKER_CN.md#故障排查)，涵盖 6 个常见问题和解决方案。
 
@@ -211,6 +212,10 @@ CLAUDE_AGENT_SESSION_STORAGE=sqlite     # memory | sqlite | postgresql
 CLAUDE_AGENT_SESSION_TTL=3600           # 会话超时（秒）
 CLAUDE_AGENT_USER_BASE_DIR=/data/users  # 用户文件目录
 CLAUDE_AGENT_API_PORT=8000              # API 服务器端口
+
+# 可选：内存保护
+CLAUDE_AGENT_MEMORY_LIMIT_MB=7168      # 内存阈值（MB），超过后拒绝创建新会话
+CLAUDE_AGENT_IDLE_SESSION_TIMEOUT=600  # 空闲会话驱逐时间（秒）
 ```
 
 ### 配置文件
@@ -229,10 +234,18 @@ session:
 defaults:
   system_prompt: "You are a helpful AI assistant."
   permission_mode: "bypassPermissions"
-  allowed_tools: [Bash, Read, Write, Edit, Glob, Grep]
+  allowed_tools: [Bash, Read, Write, Edit, Glob, Grep, Skill]
+  setting_sources: [user, project]  # 加载 Skills 必需
   model: null                # null = SDK 默认
-  max_turns: null            # null = 无限制
+  max_turns: 50              # 每会话最大对话轮数
   max_budget_usd: null       # null = 无限制
+
+api:
+  max_sessions: 20           # 最大会话总数
+  max_sessions_per_user: 5   # 每用户最大会话数
+  max_concurrent_requests: 5 # 最大并发请求数
+  memory_limit_mb: 7168      # 应用层内存阈值（MB），超过后拒绝新会话
+  idle_session_timeout: 600  # 空闲会话自动驱逐时间（秒）
 
 mcp_servers: {}              # 全局 MCP 服务器
 plugins: []                  # 全局插件
@@ -292,6 +305,20 @@ claude_agent_http/
     ├── sessions.py      # 会话管理
     └── chat.py          # 聊天端点
 ```
+
+## 🛡️ 内存保护
+
+每个会话会启动一个独立的 Claude CLI 子进程（每个约 300MB）。如果不加限制，多个会话可能耗尽主机内存。我们提供多层 OOM 防护：
+
+| 层级 | 机制 | 说明 |
+|------|------|------|
+| **Docker** | `mem_limit: 8g` | 容器内存硬限制，防止宿主机 OOM |
+| **应用层** | `memory_limit_mb: 7168` | 软限制，超过阈值后拒绝创建新会话 |
+| **空闲驱逐** | `idle_session_timeout: 600` | 10 分钟无活动自动释放内存中的客户端 |
+| **压力回收** | LRU 驱逐 | 内存压力时按最近最少使用策略驱逐会话 |
+| **OOM 优先级** | `oom_score_adj: -100` | 降低被 OOM Killer 选中的概率 |
+
+> **重要提示**: Docker 的 `deploy.resources.limits` 仅在 Swarm 模式下生效。使用 `docker-compose up` 时必须用 `mem_limit`。
 
 ## 🔒 安全特性
 

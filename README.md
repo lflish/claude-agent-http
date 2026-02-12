@@ -218,6 +218,7 @@ docker push ccr.ccs.tencentyun.com/claude/claude-agent-http:v1.0.0-20260119
 - ✅ Health checks built-in
 - ✅ Named volumes or bind mounts support
 - ✅ PostgreSQL for multi-instance deployments
+- ✅ Container memory limits (OOM protection)
 
 **Troubleshooting**: Having issues? Check our [comprehensive troubleshooting guide](DOCKER.md#troubleshooting) covering 6 common problems and solutions.
 
@@ -277,6 +278,10 @@ CLAUDE_AGENT_SESSION_STORAGE=sqlite     # memory | sqlite | postgresql
 CLAUDE_AGENT_SESSION_TTL=3600           # Session timeout (seconds)
 CLAUDE_AGENT_USER_BASE_DIR=/data/users  # User files directory
 CLAUDE_AGENT_API_PORT=8000              # API server port
+
+# Optional: Memory Protection
+CLAUDE_AGENT_MEMORY_LIMIT_MB=7168      # Refuse new sessions above this (MB)
+CLAUDE_AGENT_IDLE_SESSION_TIMEOUT=600  # Evict idle clients after N seconds
 ```
 
 ### Configuration File
@@ -298,8 +303,15 @@ defaults:
   allowed_tools: [Bash, Read, Write, Edit, Glob, Grep, Skill]  # Include "Skill" for Skills support
   setting_sources: [user, project]  # REQUIRED for Skills: loads from ~/.claude/skills/ and .claude/skills/
   model: null                # null = SDK default
-  max_turns: null            # null = unlimited
+  max_turns: 50              # Max conversation turns per session
   max_budget_usd: null       # null = unlimited
+
+api:
+  max_sessions: 20           # Maximum total sessions
+  max_sessions_per_user: 5   # Maximum sessions per user
+  max_concurrent_requests: 5 # Maximum concurrent processing requests
+  memory_limit_mb: 7168      # App-level memory threshold (MB), refuse new sessions above this
+  idle_session_timeout: 600  # Evict idle in-memory clients after N seconds
 
 mcp_servers: {}              # Global MCP servers for all sessions
 plugins: []                  # SDK-level plugins (NOT Skills)
@@ -379,6 +391,20 @@ claude_agent_http/
     ├── sessions.py      # Session management
     └── chat.py          # Chat endpoints
 ```
+
+## 🛡️ Memory Protection
+
+Each session spawns a separate Claude CLI subprocess (~300MB each). Without limits, multiple sessions can exhaust host memory. We provide multi-layer OOM protection:
+
+| Layer | Mechanism | Description |
+|-------|-----------|-------------|
+| **Docker** | `mem_limit: 8g` | Hard container memory cap, prevents host OOM |
+| **Application** | `memory_limit_mb: 7168` | Soft limit, refuses new sessions when exceeded |
+| **Idle Eviction** | `idle_session_timeout: 600` | Auto-evicts idle clients after 10 minutes |
+| **Pressure Recovery** | LRU eviction | Under memory pressure, evicts oldest sessions first |
+| **OOM Priority** | `oom_score_adj: -100` | Reduces likelihood of being killed by OOM killer |
+
+> **Important**: Docker's `deploy.resources.limits` only works in Swarm mode. Use `mem_limit` instead for `docker-compose up`.
 
 ## 🔒 Security Features
 

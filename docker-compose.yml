@@ -43,6 +43,22 @@ services:
     container_name: claude-agent-http
     restart: unless-stopped
 
+    # Memory limits - use mem_limit (works with docker-compose up)
+    # NOTE: deploy.resources.limits ONLY works in Docker Swarm mode!
+    # Host has 16GB RAM, allocate 8GB for this container
+    mem_limit: 8g
+    memswap_limit: 10g
+    mem_reservation: 1g
+
+    # OOM priority: lower value = less likely to be killed (-1000 to 1000)
+    oom_score_adj: -100
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
     # Note: Container starts as root, then switches to claudeuser in entrypoint
     # This allows entrypoint to fix volume permissions before switching users
     # For bind mounts, set UID/GID in .env to match your host user

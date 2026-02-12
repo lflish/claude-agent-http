@@ -8,7 +8,7 @@ user:
 # Session storage configuration
 session:
   storage: "memory"                # memory | sqlite | postgresql
-  ttl: 3600                        # Session TTL in seconds (0 = no expiration)
+  ttl: 1800                        # Session TTL in seconds (0 = no expiration)
   sqlite_path: "sessions.db"       # SQLite database path
   # PostgreSQL settings (when storage: postgresql)
   pg_host: "localhost"
@@ -23,6 +23,11 @@ api:
   port: 8000
   cors_origins:
     - "*"
+  max_sessions: 20
+  max_sessions_per_user: 5
+  max_concurrent_requests: 5
+  memory_limit_mb: 7168         # Refuse new sessions above this threshold (MB, within container 8G limit)
+  idle_session_timeout: 600     # Evict idle in-memory clients after 10 minutes
 
 # Default values for new sessions
 defaults:
@@ -40,25 +45,22 @@ defaults:
     - "user"                     # ~/.claude/skills/ (personal skills)
     - "project"                  # .claude/skills/ (project skills)
   model: null                    # Model to use (null = SDK default)
-  max_turns: null                # Max conversation turns (null = unlimited)
+  max_turns: 50                  # Max conversation turns (lower = less memory per session)
   max_budget_usd: null           # Max budget in USD (null = unlimited)
 
 # Global MCP servers (applied to all sessions)
 mcp_servers:
-  # Playwright MCP server - Browser automation
+  # Playwright MCP server - Browser automation (globally installed, no npm exec overhead)
   playwright:
     type: "stdio"
-    command: "npx"
-    args:
-      - "@playwright/mcp@latest"
+    command: "playwright-mcp"
+    args: []
 
-  # Filesystem MCP server - File system access (user scope)
+  # Filesystem MCP server - File system access (globally installed, no npm exec overhead)
   filesystem:
     type: "stdio"
-    command: "npx"
+    command: "mcp-server-filesystem"
     args:
-      - "-y"
-      - "@modelcontextprotocol/server-filesystem"
       - "/data/claude-users"
 
   # Remote Exec MCP server - SSE type

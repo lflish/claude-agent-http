@@ -2,6 +2,8 @@
 Core Claude Agent class for managing sessions and sending messages.
 """
 import asyncio
+import os
+import time
 from typing import Optional, Dict, Any, List, AsyncIterator
 
 from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
@@ -60,12 +62,28 @@ class ClaudeAgent:
         # Per-session locks to prevent concurrent messages
         self._session_locks: Dict[str, asyncio.Lock] = {}
 
+        # Track last activity time for idle session cleanup
+        self._last_activity: Dict[str, float] = {}
+
+        # Concurrency control semaphore
+        self._concurrent_semaphore = asyncio.Semaphore(config.api.max_concurrent_requests)
+
+        # Background cleanup task
+        self._cleanup_task: Optional[asyncio.Task] = None
+
     async def __aenter__(self):
         """Async context manager entry."""
+        self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit: cleanup resources."""
+        if self._cleanup_task:
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except asyncio.CancelledError:
+                pass
         await self.cleanup()
         await self.storage.close()
 
@@ -91,6 +109,28 @@ class ClaudeAgent:
         Raises:
             ClientCreationError: If session creation fails
         """
+        # Check memory pressure before creating new session
+        if not self._check_memory_pressure():
+            mem_mb = self._get_process_memory_mb()
+            raise ClientCreationError(
+                f"Memory pressure too high ({mem_mb:.0f}MB / {self.config.api.memory_limit_mb}MB limit). "
+                f"Close existing sessions or wait for idle cleanup."
+            )
+
+        # Check global session limit
+        async with self._clients_lock:
+            if len(self._clients) >= self.config.api.max_sessions:
+                raise ClientCreationError(
+                    f"Maximum sessions limit ({self.config.api.max_sessions}) reached"
+                )
+
+        # Check per-user session limit
+        user_sessions = await self.list_sessions(user_id=user_id)
+        if len(user_sessions) >= self.config.api.max_sessions_per_user:
+            raise ClientCreationError(
+                f"User {user_id} has reached maximum sessions ({self.config.api.max_sessions_per_user})"
+            )
+
         # Build cwd
         cwd = build_cwd(user_id, subdir, self.config.user.base_dir)
 
@@ -161,6 +201,7 @@ class ClaudeAgent:
             # Save client instance
             async with self._clients_lock:
                 self._clients[session_id] = client
+                self._last_activity[session_id] = time.time()
 
             return session_id
 
@@ -223,6 +264,7 @@ class ClaudeAgent:
         async with self._clients_lock:
             if session_id not in self._clients:
                 self._clients[session_id] = client
+                self._last_activity[session_id] = time.time()
             else:
                 await client.__aexit__(None, None, None)
 
@@ -253,6 +295,8 @@ class ClaudeAgent:
 
             if session_id in self._session_locks:
                 del self._session_locks[session_id]
+
+            self._last_activity.pop(session_id, None)
 
         await self.storage.delete(session_id)
         return True
@@ -288,43 +332,45 @@ class ClaudeAgent:
         if session_lock.locked():
             raise SessionBusyError(f"Session {session_id} is busy")
 
-        async with session_lock:
-            try:
-                client = await self._get_or_load_client(session_id)
-                await client.query(prompt=message)
+        async with self._concurrent_semaphore:
+            async with session_lock:
+                try:
+                    client = await self._get_or_load_client(session_id)
+                    self._last_activity[session_id] = time.time()
+                    await client.query(prompt=message)
 
-                full_text = ""
-                tool_calls = []
+                    full_text = ""
+                    tool_calls = []
 
-                async for msg in client.receive_response():
-                    if hasattr(msg, 'content') and msg.content:
-                        for block in msg.content:
-                            if hasattr(block, 'text') and block.text:
-                                full_text = block.text
+                    async for msg in client.receive_response():
+                        if hasattr(msg, 'content') and msg.content:
+                            for block in msg.content:
+                                if hasattr(block, 'text') and block.text:
+                                    full_text = block.text
 
-                            if hasattr(block, 'type') and block.type == 'tool_use':
-                                tool_calls.append({
-                                    'tool': getattr(block, 'name', 'unknown'),
-                                    'input': getattr(block, 'input', {})
-                                })
+                                if hasattr(block, 'type') and block.type == 'tool_use':
+                                    tool_calls.append({
+                                        'tool': getattr(block, 'name', 'unknown'),
+                                        'input': getattr(block, 'input', {})
+                                    })
 
-                    if hasattr(msg, 'is_error') and msg.is_error:
-                        raise MessageSendError(
-                            f"Error in response: {getattr(msg, 'result', 'Unknown error')}"
-                        )
+                        if hasattr(msg, 'is_error') and msg.is_error:
+                            raise MessageSendError(
+                                f"Error in response: {getattr(msg, 'result', 'Unknown error')}"
+                            )
 
-                await self.storage.touch(session_id)
+                    await self.storage.touch(session_id)
 
-                return ChatResponse(
-                    session_id=session_id,
-                    text=full_text,
-                    tool_calls=tool_calls,
-                )
+                    return ChatResponse(
+                        session_id=session_id,
+                        text=full_text,
+                        tool_calls=tool_calls,
+                    )
 
-            except (SessionNotFoundError, SessionBusyError):
-                raise
-            except Exception as e:
-                raise MessageSendError(f"Failed to send message: {e}")
+                except (SessionNotFoundError, SessionBusyError):
+                    raise
+                except Exception as e:
+                    raise MessageSendError(f"Failed to send message: {e}")
 
     async def send_message_stream(
         self, session_id: str, message: str
@@ -348,48 +394,50 @@ class ClaudeAgent:
         if session_lock.locked():
             raise SessionBusyError(f"Session {session_id} is busy")
 
-        async with session_lock:
-            try:
-                client = await self._get_or_load_client(session_id)
-                await client.query(prompt=message)
+        async with self._concurrent_semaphore:
+            async with session_lock:
+                try:
+                    client = await self._get_or_load_client(session_id)
+                    self._last_activity[session_id] = time.time()
+                    await client.query(prompt=message)
 
-                full_text = ""
-                async for msg in client.receive_response():
-                    if hasattr(msg, 'content') and msg.content:
-                        for block in msg.content:
-                            if hasattr(block, 'text') and block.text:
-                                new_text = block.text
-                                if new_text.startswith(full_text):
-                                    delta = new_text[len(full_text):]
-                                    full_text = new_text
-                                else:
-                                    delta = new_text
-                                    full_text += new_text
+                    full_text = ""
+                    async for msg in client.receive_response():
+                        if hasattr(msg, 'content') and msg.content:
+                            for block in msg.content:
+                                if hasattr(block, 'text') and block.text:
+                                    new_text = block.text
+                                    if new_text.startswith(full_text):
+                                        delta = new_text[len(full_text):]
+                                        full_text = new_text
+                                    else:
+                                        delta = new_text
+                                        full_text += new_text
 
-                                if delta:
-                                    yield StreamChunk(type='text_delta', text=delta)
+                                    if delta:
+                                        yield StreamChunk(type='text_delta', text=delta)
 
-                            if hasattr(block, 'type') and block.type == 'tool_use':
-                                yield StreamChunk(
-                                    type='tool_use',
-                                    tool_name=getattr(block, 'name', 'unknown'),
-                                    tool_input=getattr(block, 'input', {}),
-                                )
+                                if hasattr(block, 'type') and block.type == 'tool_use':
+                                    yield StreamChunk(
+                                        type='tool_use',
+                                        tool_name=getattr(block, 'name', 'unknown'),
+                                        tool_input=getattr(block, 'input', {}),
+                                    )
 
-                    if hasattr(msg, 'is_error') and msg.is_error:
-                        yield StreamChunk(
-                            type='error',
-                            error=getattr(msg, 'result', 'Unknown error')
-                        )
-                        return
+                        if hasattr(msg, 'is_error') and msg.is_error:
+                            yield StreamChunk(
+                                type='error',
+                                error=getattr(msg, 'result', 'Unknown error')
+                            )
+                            return
 
-                yield StreamChunk(type='done')
-                await self.storage.touch(session_id)
+                    yield StreamChunk(type='done')
+                    await self.storage.touch(session_id)
 
-            except (SessionNotFoundError, SessionBusyError):
-                raise
-            except Exception as e:
-                yield StreamChunk(type='error', error=str(e))
+                except (SessionNotFoundError, SessionBusyError):
+                    raise
+                except Exception as e:
+                    yield StreamChunk(type='error', error=str(e))
 
     # ============ Cleanup ============
 
@@ -406,6 +454,66 @@ class ClaudeAgent:
                     del self._clients[session_id]
 
             self._session_locks.clear()
+            self._last_activity.clear()
+
+    # ============ Memory Management ============
+
+    def _get_process_memory_mb(self) -> float:
+        """Get total memory usage of this process and its children in MB."""
+        try:
+            pid = os.getpid()
+            # Read own RSS
+            with open(f'/proc/{pid}/status', 'r') as f:
+                for line in f:
+                    if line.startswith('VmRSS:'):
+                        own_rss_kb = int(line.split()[1])
+                        break
+                else:
+                    own_rss_kb = 0
+
+            # Read children RSS
+            children_rss_kb = 0
+            try:
+                children_dir = f'/proc/{pid}/task/{pid}/children'
+                if os.path.exists(children_dir):
+                    with open(children_dir, 'r') as f:
+                        child_pids = f.read().strip().split()
+                else:
+                    child_pids = []
+                    # Fallback: scan /proc for children
+                    for entry in os.listdir('/proc'):
+                        if entry.isdigit():
+                            try:
+                                with open(f'/proc/{entry}/stat', 'r') as sf:
+                                    parts = sf.read().split()
+                                    if len(parts) > 3 and parts[3] == str(pid):
+                                        child_pids.append(entry)
+                            except (OSError, IOError):
+                                continue
+
+                for cpid in child_pids:
+                    try:
+                        with open(f'/proc/{cpid}/status', 'r') as f:
+                            for line in f:
+                                if line.startswith('VmRSS:'):
+                                    children_rss_kb += int(line.split()[1])
+                                    break
+                    except (OSError, IOError):
+                        continue
+            except (OSError, IOError):
+                pass
+
+            return (own_rss_kb + children_rss_kb) / 1024.0
+        except Exception:
+            return 0.0
+
+    def _check_memory_pressure(self) -> bool:
+        """Check if system is under memory pressure. Returns True if safe."""
+        limit_mb = self.config.api.memory_limit_mb
+        if limit_mb <= 0:
+            return True
+        current_mb = self._get_process_memory_mb()
+        return current_mb < limit_mb
 
     # ============ Private Methods ============
 
@@ -491,3 +599,75 @@ class ClaudeAgent:
                 return self._clients[session_id]
             else:
                 raise SessionNotFoundError(f"Session {session_id} failed to load")
+
+    async def _periodic_cleanup(self) -> None:
+        """Periodically cleanup expired/idle sessions and monitor memory."""
+        while True:
+            try:
+                await asyncio.sleep(60)  # Check every 1 minute
+
+                now = time.time()
+                expired = []
+                idle = []
+                idle_timeout = self.config.api.idle_session_timeout
+
+                async with self._clients_lock:
+                    for sid in list(self._clients.keys()):
+                        info = await self.storage.get(sid)
+                        if info is None:  # Already expired in storage
+                            expired.append(sid)
+                        elif idle_timeout > 0:
+                            last_active = self._last_activity.get(sid, 0)
+                            if now - last_active > idle_timeout:
+                                idle.append(sid)
+
+                # Close expired sessions
+                for sid in expired:
+                    await self.close_session(sid)
+
+                # Evict idle in-memory clients (keep session in storage for resume)
+                for sid in idle:
+                    async with self._clients_lock:
+                        if sid in self._clients:
+                            client = self._clients[sid]
+                            try:
+                                await client.__aexit__(None, None, None)
+                            except Exception:
+                                pass
+                            finally:
+                                del self._clients[sid]
+                            self._last_activity.pop(sid, None)
+
+                # Memory pressure: force-evict oldest clients if over limit
+                if not self._check_memory_pressure():
+                    mem_mb = self._get_process_memory_mb()
+                    print(f"[cleanup] Memory pressure: {mem_mb:.0f}MB, evicting idle clients")
+                    async with self._clients_lock:
+                        # Sort by last activity, evict oldest first
+                        sorted_sids = sorted(
+                            self._clients.keys(),
+                            key=lambda s: self._last_activity.get(s, 0)
+                        )
+                        for sid in sorted_sids:
+                            if self._check_memory_pressure():
+                                break
+                            if sid in self._clients:
+                                client = self._clients[sid]
+                                try:
+                                    await client.__aexit__(None, None, None)
+                                except Exception:
+                                    pass
+                                finally:
+                                    del self._clients[sid]
+                                self._last_activity.pop(sid, None)
+                                print(f"[cleanup] Force-evicted session {sid} due to memory pressure")
+
+                total_cleaned = len(expired) + len(idle)
+                if total_cleaned > 0:
+                    mem_mb = self._get_process_memory_mb()
+                    print(f"[cleanup] Closed {len(expired)} expired, evicted {len(idle)} idle sessions. Memory: {mem_mb:.0f}MB")
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"[cleanup] Error: {e}")
