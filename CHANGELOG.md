@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-02-12
+
+### Fixed
+- **Critical: OOM (Out of Memory) killing claude processes**
+  - Root cause: `deploy.resources.limits` in docker-compose.yml is ignored without Docker Swarm mode, resulting in no container memory limits
+  - A single claude CLI subprocess reached 71.5GB virtual memory, triggering host-level OOM killer
+  - Replaced with `mem_limit: 8g` / `memswap_limit: 10g` which works with standard `docker-compose up`
+
+### Added
+- **Multi-layer memory protection system**:
+  - Docker layer: `mem_limit` hard cap (8GB) prevents host OOM
+  - Application layer: `memory_limit_mb` soft limit, refuses new sessions when exceeded
+  - Idle eviction: `idle_session_timeout` auto-releases in-memory clients after inactivity (default 600s)
+  - LRU pressure recovery: periodic cleanup evicts oldest sessions first when memory is high
+  - `oom_score_adj: -100` reduces OOM killer targeting probability
+- Process tree memory monitoring in health endpoint (includes child process RSS)
+- New config options: `memory_limit_mb`, `idle_session_timeout` with env var overrides
+- Memory protection documentation in README.md and README_CN.md
+
+### Changed
+- Periodic cleanup interval reduced from 120s to 60s for faster response to memory pressure
+- Default `max_turns` set to 50 (was 200) to bound per-session memory growth
+- Default `max_sessions` tuned to 20 with `max_concurrent_requests: 5`
+
 ## [Unreleased]
 
 ### Fixed
@@ -82,6 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker deployment support
 - API documentation and Postman collection
 
-[Unreleased]: https://github.com/lflish/claude-agent-http/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/lflish/claude-agent-http/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/lflish/claude-agent-http/compare/v1.0.1...v1.0.3
 [1.0.1]: https://github.com/lflish/claude-agent-http/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/lflish/claude-agent-http/releases/tag/v1.0.0
