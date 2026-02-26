@@ -241,6 +241,9 @@ class ClaudeAgent:
         if not session_info:
             raise SessionNotFoundError(f"Session {session_id} not found or expired")
 
+        # Ensure working directory exists (may have been removed or renamed)
+        ensure_directory(session_info.cwd, self.config.user.auto_create_dir)
+
         # Rebuild absolute add_dirs
         abs_add_dirs = build_add_dirs(
             session_info.add_dirs,
@@ -569,9 +572,16 @@ class ClaudeAgent:
             return None
 
         # Try to match against existing user directories
+        # NOTE: Claude CLI encoding is lossy (replaces '/' with '-'), so
+        # we can't distinguish '-' in user_id from path separators.
+        # Use normalized comparison (treat '_' and '-' as equivalent) as fallback.
         user_id = None
         subdir = None
         cwd = None
+
+        def _normalize(s: str) -> str:
+            """Normalize string for comparison: treat '_' and '-' as equivalent."""
+            return s.replace('_', '-')
 
         if os.path.isdir(base_dir):
             try:
@@ -588,11 +598,25 @@ class ClaudeAgent:
                         user_id = entry
                         cwd = candidate_cwd
                         break
+                    elif _normalize(found_dir_name) == _normalize(candidate_encoded):
+                        # Normalized match: user_id contains '_' or '-' that
+                        # got conflated in the lossy '/' → '-' encoding
+                        user_id = entry
+                        cwd = candidate_cwd
+                        break
                     elif found_dir_name.startswith(candidate_encoded + '-'):
                         # Prefix match: session has a subdir
                         user_id = entry
                         subdir_encoded = found_dir_name[len(candidate_encoded) + 1:]
                         # Best-effort subdir decode (ambiguous with hyphens)
+                        subdir = subdir_encoded
+                        cwd = os.path.normpath(os.path.join(base_dir, user_id, subdir))
+                        break
+                    elif _normalize(found_dir_name).startswith(_normalize(candidate_encoded) + '-'):
+                        # Normalized prefix match
+                        user_id = entry
+                        norm_prefix_len = len(_normalize(candidate_encoded)) + 1
+                        subdir_encoded = _normalize(found_dir_name)[norm_prefix_len:]
                         subdir = subdir_encoded
                         cwd = os.path.normpath(os.path.join(base_dir, user_id, subdir))
                         break

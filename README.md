@@ -363,7 +363,6 @@ For detailed Skills configuration, see [MCP_AND_SKILLS.md](MCP_AND_SKILLS.md) or
 │    └──────────┘      └─────────────────┘      └──────────┘│
 │                                                             │
 │                         ┌──────────────┐                   │
-│                         ┌──────────────┐                   │
 │                         │ Claude Code  │                   │
 │                         │ CLI (Node.js)│                   │
 │                         └──────────────┘                   │
